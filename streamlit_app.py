@@ -3,7 +3,6 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 import spacy
-import os
 
 # Load spaCy English model
 nlp = spacy.load("en_core_web_sm")
@@ -61,4 +60,9 @@ if uploaded_file:
     for cluster in range(num_clusters):
         st.write(f"Cluster {cluster}:")
         cluster_data = filtered_data[filtered_data['Cluster'] == cluster]
-    
+        cluster_text = ' '.join(cluster_data['Processed_Text'])
+        doc = nlp(cluster_text.lower())
+        word_freq = pd.Series([token.text for token in doc if token.is_alpha and not token.is_stop]).value_counts().head(10)
+        st.write(word_freq)
+else:
+    st.warning("Please upload an Excel file to proceed.")
