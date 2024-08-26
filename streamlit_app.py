@@ -2,33 +2,38 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
-from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS as sklearn_stop_words
-import spacy
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+import openai
+from dotenv import load_dotenv
+import os
 
-# Load spaCy English model
-nlp = spacy.load("en_core_web_sm")
+# Load environment variables from .env file
+load_dotenv()
 
-# Function to preprocess text data using spaCy
+# Set OpenAI API key
+openai.api_key = os.getenv('OPENAI_API_KEY')
+
+# Ensure NLTK dependencies are downloaded
+nltk.download('punkt')
+nltk.download('stopwords')
+
+# Function to preprocess text data
 def preprocess_text(text):
-    doc = nlp(text.lower())
-    filtered_words = [token.text for token in doc if token.is_alpha and not token.is_stop]
+    stop_words = set(stopwords.words('english'))
+    word_tokens = word_tokenize(text.lower())
+    filtered_words = [word for word in word_tokens if word.isalnum() and word not in stop_words]
     return ' '.join(filtered_words)
 
-# Function to extract top terms per cluster
-def get_top_terms_per_cluster(vectorizer, kmeans, num_terms=10):
-    terms = vectorizer.get_feature_names_out()
-    order_centroids = kmeans.cluster_centers_.argsort()[:, ::-1]
-    top_terms = {}
-    for i in range(kmeans.n_clusters):
-        top_terms[i] = [terms[ind] for ind in order_centroids[i, :num_terms]]
-    return top_terms
-
-# Function to provide qualitative analysis based on top terms
-def provide_qualitative_analysis(top_terms):
-    analysis = {}
-    for cluster, terms in top_terms.items():
-        analysis[cluster] = f"Common problems for this cluster seem to involve aspects such as {', '.join(terms[:5])}."
-    return analysis
+# Function to get GPT-4 analysis
+def get_gpt4_analysis(text_data):
+    response = openai.Completion.create(
+        engine="gpt-4",
+        prompt=f"Provide a qualitative analysis based on the following text data: {text_data}",
+        max_tokens=1000
+    )
+    return response['choices'][0]['text']
 
 # Streamlit app layout
 st.title("LRMG Problem Analysis Tool")
@@ -40,7 +45,7 @@ if uploaded_file:
     # Load Excel data
     @st.cache_data
     def load_data(file):
-        data = pd.read_excel(file)
+        data = pd.read_excel(file, engine='openpyxl')
         data.fillna("", inplace=True)  # Fill NaN values with empty strings for easier processing
         return data
 
@@ -55,44 +60,28 @@ if uploaded_file:
     st.write(filtered_data)
 
     # Combine all problem descriptions into one text column for analysis
-    filtered_data['All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
+    filtered_data.loc[:, 'All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
 
     # Preprocess the text data
-    filtered_data['Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
+    filtered_data.loc[:, 'Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
 
     # Perform text vectorization using TF-IDF
-    vectorizer = TfidfVectorizer(stop_words=sklearn_stop_words)
+    vectorizer = TfidfVectorizer(stop_words='english')
     X = vectorizer.fit_transform(filtered_data['Processed_Text'])
 
     # Perform KMeans clustering
     num_clusters = st.slider('Select number of clusters:', 2, 10, 3)
     kmeans = KMeans(n_clusters=num_clusters, random_state=42)
-    filtered_data['Cluster'] = kmeans.fit_predict(X)
+    filtered_data.loc[:, 'Cluster'] = kmeans.fit_predict(X)
 
     st.subheader("Clustered Data")
     st.write(filtered_data[['Division (TD, TT, TA, Impactful)', 'All_Problems', 'Cluster']])
 
-    # Extract top terms per cluster for analysis
-    top_terms = get_top_terms_per_cluster(vectorizer, kmeans)
+    # Combine all processed text for GPT-4 analysis
+    combined_text = ' '.join(filtered_data['Processed_Text'])
+    analysis = get_gpt4_analysis(combined_text)
 
-    # Provide qualitative analysis based on top terms
-    qualitative_analysis = provide_qualitative_analysis(top_terms)
-
-    st.subheader("Qualitative Analysis of Clusters")
-    for cluster, analysis in qualitative_analysis.items():
-        st.write(f"Cluster {cluster}: {analysis}")
-
-    # Display top terms for each cluster
-    st.subheader("Top Terms in Each Cluster")
-    for cluster, terms in top_terms.items():
-        st.write(f"Cluster {cluster}: {', '.join(terms)}")
-
-    # Display common problems solved based on clusters
-    st.subheader("Common Problems Solved")
-    common_problems = []
-    for cluster, terms in top_terms.items():
-        problem = f"Cluster {cluster} primarily deals with problems related to: {', '.join(terms[:5])}."
-        common_problems.append(problem)
-        st.write(problem)
+    st.subheader("GPT-4 Analysis")
+    st.write(analysis)
 else:
     st.warning("Please upload an Excel file to proceed.")
