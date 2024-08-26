@@ -2,35 +2,16 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
+import spacy
 import os
 
-# Define a custom NLTK data path
-nltk_data_path = '/home/appuser/nltk_data'
-if not os.path.exists(nltk_data_path):
-    os.makedirs(nltk_data_path)
+# Load spaCy English model
+nlp = spacy.load("en_core_web_sm")
 
-# Add the NLTK data path to NLTK's data search paths
-nltk.data.path.append(nltk_data_path)
-
-# Download NLTK resources if not already downloaded
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt', download_dir=nltk_data_path, quiet=True)
-
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords', download_dir=nltk_data_path, quiet=True)
-
-# Function to preprocess text data
+# Function to preprocess text data using spaCy
 def preprocess_text(text):
-    stop_words = set(stopwords.words('english'))
-    word_tokens = word_tokenize(text.lower())
-    filtered_words = [word for word in word_tokens if word.isalnum() and word not in stop_words]
+    doc = nlp(text.lower())
+    filtered_words = [token.text for token in doc if token.is_alpha and not token.is_stop]
     return ' '.join(filtered_words)
 
 # Streamlit app layout
@@ -81,8 +62,8 @@ if uploaded_file:
         st.write(f"Cluster {cluster}:")
         cluster_data = filtered_data[filtered_data['Cluster'] == cluster]
         cluster_text = ' '.join(cluster_data['Processed_Text'])
-        word_tokens = word_tokenize(cluster_text)
-        word_freq = pd.Series(word_tokens).value_counts().head(10)
+        doc = nlp(cluster_text.lower())
+        word_freq = pd.Series([token.text for token in doc if token.is_alpha and not token.is_stop]).value_counts().head(10)
         st.write(word_freq)
 else:
     st.warning("Please upload an Excel file to proceed.")
