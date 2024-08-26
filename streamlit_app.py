@@ -33,10 +33,9 @@ def generate_insights(text):
         max_tokens=4095,
         top_p=1,
         frequency_penalty=0,
-        presence_penalty=0,
-        response_format={"type": "text"}
+        presence_penalty=0
     )
-    return response.choices[0].message['content']
+    return response.choices[0].message.content  # Access the content attribute correctly
 
 # Streamlit UI
 st.title("Text Analysis with GPT-4")
@@ -59,8 +58,8 @@ if uploaded_file is not None:
     filtered_data = data[data['Division (TD, TT, TA, Impactful)'] == selected_division]
 
     # Combine all relevant columns into one
-    filtered_data['All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
-    filtered_data['Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
+    filtered_data.loc[:, 'All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
+    filtered_data.loc[:, 'Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
 
     # Perform text vectorization using TF-IDF
     vectorizer = TfidfVectorizer(stop_words='english')
@@ -68,10 +67,10 @@ if uploaded_file is not None:
 
     # Perform KMeans clustering
     num_clusters = st.slider('Select number of clusters:', 2, 10, 3)
-    kmeans = KMeans(n_clusters=num_clusters, random_state=42)
+    kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init='auto')
     kmeans.fit(X)
 
-    filtered_data['Cluster'] = kmeans.labels_
+    filtered_data.loc[:, 'Cluster'] = kmeans.labels_
 
     # Display clusters and insights
     for cluster_num in range(num_clusters):
@@ -82,4 +81,3 @@ if uploaded_file is not None:
 
     # Display the processed data
     st.write(filtered_data)
-
