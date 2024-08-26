@@ -5,10 +5,26 @@ from sklearn.cluster import KMeans
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+import os
 
-# Ensure NLTK dependencies are downloaded
-nltk.download('punkt')
-nltk.download('stopwords')
+# Define a custom NLTK data path
+nltk_data_path = '/home/appuser/nltk_data'
+if not os.path.exists(nltk_data_path):
+    os.makedirs(nltk_data_path)
+
+# Add the NLTK data path to NLTK's data search paths
+nltk.data.path.append(nltk_data_path)
+
+# Download NLTK resources if not already downloaded
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt', download_dir=nltk_data_path, quiet=True)
+
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords', download_dir=nltk_data_path, quiet=True)
 
 # Function to preprocess text data
 def preprocess_text(text):
