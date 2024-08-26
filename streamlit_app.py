@@ -6,9 +6,8 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 
-# Ensure NLTK dependencies are downloaded
-nltk.download('punkt', quiet=True)
-nltk.download('stopwords', quiet=True)
+# Set the NLTK data path to where the resources are downloaded
+nltk.data.path.append('/home/vscode/nltk_data')
 
 # Function to preprocess text data
 def preprocess_text(text):
