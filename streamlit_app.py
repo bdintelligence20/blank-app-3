@@ -27,10 +27,10 @@ def generate_insights(text):
         model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are an expert analyst."},
-            {"role": "user", "content": f"Analyze the following text and provide 10 common problems: {text}"}
+            {"role": "user", "content": f"Analyze the following responses from a questionnaire sent to business leaders. These responses detail the problems we are currently solving for existing customers and the problems addressed by our LRMG (+Impactful) offerings. Identify common themes and summarize the top 5 problems we solve for this division, keeping each problem description concise and to one sentence. Do not include any analysis on punctuation or irrelevant details; focus solely on the problems being addressed: {text}"}
         ],
         temperature=1,
-        max_tokens=4095,
+        max_tokens=1024,
         top_p=1,
         frequency_penalty=0,
         presence_penalty=0
@@ -57,8 +57,9 @@ if uploaded_file is not None:
     selected_division = st.selectbox("Select a Division:", division_options)
     filtered_data = data[data['Division (TD, TT, TA, Impactful)'] == selected_division]
 
-    # Combine all relevant columns into one
-    filtered_data.loc[:, 'All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
+    # Combine all problem-related columns into one
+    problem_columns = [col for col in data.columns if 'problem' in col.lower()]  # Adjust this based on the exact column names
+    filtered_data.loc[:, 'All_Problems'] = filtered_data[problem_columns].apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
     filtered_data.loc[:, 'Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
 
     # Perform text vectorization using TF-IDF
