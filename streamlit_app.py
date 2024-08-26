@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS as sklearn_stop_words
 import spacy
 
 # Load spaCy English model
@@ -12,6 +13,22 @@ def preprocess_text(text):
     doc = nlp(text.lower())
     filtered_words = [token.text for token in doc if token.is_alpha and not token.is_stop]
     return ' '.join(filtered_words)
+
+# Function to extract top terms per cluster
+def get_top_terms_per_cluster(vectorizer, kmeans, num_terms=10):
+    terms = vectorizer.get_feature_names_out()
+    order_centroids = kmeans.cluster_centers_.argsort()[:, ::-1]
+    top_terms = {}
+    for i in range(kmeans.n_clusters):
+        top_terms[i] = [terms[ind] for ind in order_centroids[i, :num_terms]]
+    return top_terms
+
+# Function to provide qualitative analysis based on top terms
+def provide_qualitative_analysis(top_terms):
+    analysis = {}
+    for cluster, terms in top_terms.items():
+        analysis[cluster] = f"Common problems for this cluster seem to involve aspects such as {', '.join(terms[:5])}."
+    return analysis
 
 # Streamlit app layout
 st.title("LRMG Problem Analysis Tool")
@@ -44,7 +61,7 @@ if uploaded_file:
     filtered_data['Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
 
     # Perform text vectorization using TF-IDF
-    vectorizer = TfidfVectorizer(stop_words='english')
+    vectorizer = TfidfVectorizer(stop_words=sklearn_stop_words)
     X = vectorizer.fit_transform(filtered_data['Processed_Text'])
 
     # Perform KMeans clustering
@@ -55,14 +72,27 @@ if uploaded_file:
     st.subheader("Clustered Data")
     st.write(filtered_data[['Division (TD, TT, TA, Impactful)', 'All_Problems', 'Cluster']])
 
-    # Display common themes in each cluster
-    st.subheader("Common Themes in Clusters")
-    for cluster in range(num_clusters):
-        st.write(f"Cluster {cluster}:")
-        cluster_data = filtered_data[filtered_data['Cluster'] == cluster]
-        cluster_text = ' '.join(cluster_data['Processed_Text'])
-        doc = nlp(cluster_text.lower())
-        word_freq = pd.Series([token.text for token in doc if token.is_alpha and not token.is_stop]).value_counts().head(10)
-        st.write(word_freq)
+    # Extract top terms per cluster for analysis
+    top_terms = get_top_terms_per_cluster(vectorizer, kmeans)
+
+    # Provide qualitative analysis based on top terms
+    qualitative_analysis = provide_qualitative_analysis(top_terms)
+
+    st.subheader("Qualitative Analysis of Clusters")
+    for cluster, analysis in qualitative_analysis.items():
+        st.write(f"Cluster {cluster}: {analysis}")
+
+    # Display top terms for each cluster
+    st.subheader("Top Terms in Each Cluster")
+    for cluster, terms in top_terms.items():
+        st.write(f"Cluster {cluster}: {', '.join(terms)}")
+
+    # Display common problems solved based on clusters
+    st.subheader("Common Problems Solved")
+    common_problems = []
+    for cluster, terms in top_terms.items():
+        problem = f"Cluster {cluster} primarily deals with problems related to: {', '.join(terms[:5])}."
+        common_problems.append(problem)
+        st.write(problem)
 else:
     st.warning("Please upload an Excel file to proceed.")
