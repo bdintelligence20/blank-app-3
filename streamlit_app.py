@@ -9,12 +9,15 @@ import spacy
 import matplotlib.pyplot as plt
 import seaborn as sns
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import nltk
+
+# Download necessary NLTK data
+nltk.download('vader_lexicon')
 
 # Load spaCy English model
 nlp = spacy.load("en_core_web_sm")
 
 # Initialize NLTK's SentimentIntensityAnalyzer
-nltk.download('vader_lexicon')
 sia = SentimentIntensityAnalyzer()
 
 # Function to preprocess text data using spaCy
