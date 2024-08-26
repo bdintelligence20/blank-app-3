@@ -1,25 +1,19 @@
 import os
 import streamlit as st
 import pandas as pd
-import nltk
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 from openai import OpenAI
+import spacy
 
-# Download NLTK data
-nltk.download('punkt')
-nltk.download('stopwords')
+# Load spaCy English model
+nlp = spacy.load("en_core_web_sm")
 
-# Function to preprocess text data
+# Function to preprocess text data using spaCy
 def preprocess_text(text):
-    from nltk.corpus import stopwords
-    from nltk.tokenize import word_tokenize
-    import string
-    
-    stop_words = set(stopwords.words('english'))
-    word_tokens = word_tokenize(text.lower())
-    filtered_text = ' '.join([w for w in word_tokens if w.isalpha() and w not in stop_words and w not in string.punctuation])
-    return filtered_text
+    doc = nlp(text.lower())
+    tokens = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
+    return ' '.join(tokens)
 
 # Access the API key from Streamlit secrets
 api_key = st.secrets["openai"]["api_key"]
@@ -31,8 +25,10 @@ client = OpenAI(api_key=api_key)
 def generate_insights(text):
     response = client.chat.completions.create(
         model="gpt-4o",
-        messages=[{"role": "system", "content": "You are an expert analyst."},
-                  {"role": "user", "content": f"Analyze the following text and provide 10 common problems: {text}"}],
+        messages=[
+            {"role": "system", "content": "You are an expert analyst."},
+            {"role": "user", "content": f"Analyze the following text and provide 10 common problems: {text}"}
+        ],
         temperature=1,
         max_tokens=4095,
         top_p=1,
@@ -77,7 +73,7 @@ if uploaded_file is not None:
 
     filtered_data['Cluster'] = kmeans.labels_
 
-    # Display clusters
+    # Display clusters and insights
     for cluster_num in range(num_clusters):
         st.write(f"### Cluster {cluster_num + 1}")
         cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
@@ -86,3 +82,4 @@ if uploaded_file is not None:
 
     # Display the processed data
     st.write(filtered_data)
+
