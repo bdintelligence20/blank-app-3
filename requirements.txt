@@ -10,4 +10,4 @@ openai
 python-dotenv
 nltk
 matplotlib
-pip install seaborn
+seaborn
