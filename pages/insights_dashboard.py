@@ -1,100 +1,91 @@
 import streamlit as st
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-import pandas as pd
-from sklearn.metrics.pairwise import cosine_similarity
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
-import numpy as np
-import nltk
 
-# Initialize NLTK's SentimentIntensityAnalyzer
-nltk.download('vader_lexicon')
-sia = SentimentIntensityAnalyzer()
+# Function to display top 5 problems per division based on problem-solving questionnaire
+def display_top_problems_per_division(divisions_data):
+    st.subheader("Top 5 Problems Per Division Based on Problem Solving Questionnaire")
+    for division, problems in divisions_data.items():
+        st.write(f"**{division}**")
+        for problem in problems:
+            st.write(f"- {problem}")
+        st.write("")
 
-# Function to perform sentiment analysis on text
-def analyze_sentiment(text):
-    return sia.polarity_scores(text)
+# Function to display consolidated clusters for all divisions
+def display_consolidated_clusters(clusters):
+    st.subheader("Consolidated Clusters (All Divisions)")
+    for idx, cluster in enumerate(clusters):
+        st.write(f"**Cluster {idx + 1}**")
+        st.write(cluster)
+        st.write("")
 
-# Function to extract keywords from text data
-def extract_keywords(texts, n=10):
-    vectorizer = CountVectorizer(stop_words='english', ngram_range=(1, 3))
-    X = vectorizer.fit_transform(texts)
-    keywords = vectorizer.get_feature_names_out()
-    counts = X.toarray().sum(axis=0)
-    keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
-    return keyword_counts.head(n)
+# Function to display consolidated data visualizations
+def display_data_visualizations(data, title):
+    st.subheader(f"Consolidated Data Visualizations ({title})")
+    
+    # Keyword frequency visualization
+    st.write("**Keyword Frequency**")
+    fig, ax = plt.subplots()
+    sns.barplot(x='Count', y='Keyword', data=data, ax=ax)
+    ax.set_xlabel('Count')
+    ax.set_ylabel('Keyword')
+    st.pyplot(fig)
 
-# Page title
+# Function to display keyword data
+def display_keywords(short_tail, long_tail, title):
+    st.subheader(f"{title} Keywords")
+    st.write("**Short-Tail Keywords**")
+    st.write(short_tail)
+    st.write("**Long-Tail Keywords**")
+    st.write(long_tail)
+
 st.title("Insights Dashboard")
 
-if 'filtered_data' not in st.session_state or 'excel_texts' not in st.session_state:
-    st.write("No data available. Please go to the 'Data Page' and submit data first.")
-else:
-    filtered_data = st.session_state['filtered_data']
-    excel_texts = st.session_state['excel_texts']
-    cluster_labels = st.session_state['cluster_labels']
-    num_clusters = st.session_state['excel_clusters']
-    excel_insights = st.session_state['excel_insights']
+# Check if data is available in session state
+if 'excel_insights' in st.session_state:
+    # Data sheet upload insights
+    st.header("Data Sheet Upload")
+    
+    # Top 5 problems per division
+    if 'division_problems' in st.session_state:
+        display_top_problems_per_division(st.session_state['division_problems'])
 
-    # Display top 5 problems per division
-    st.write("## Top 5 Problems per Division")
-    for i, insight in enumerate(excel_insights):
-        st.write(f"### Cluster {i + 1}: {cluster_labels[i]}")
-        st.write(insight)
+    # Consolidated clusters (All divisions)
+    if 'consolidated_clusters' in st.session_state:
+        display_consolidated_clusters(st.session_state['consolidated_clusters'])
 
-    # Cluster Distribution
-    st.write("## Cluster Distribution for Excel Data")
-    cluster_counts = filtered_data['Cluster'].value_counts()
-    fig, ax = plt.subplots()
-    sns.barplot(x=cluster_counts.index, y=cluster_counts.values, ax=ax)
-    ax.set_xlabel('Cluster')
-    ax.set_ylabel('Number of Responses')
-    ax.set_title('Distribution of Responses Across Clusters')
-    st.pyplot(fig)
+    # Consolidated data visualizations (All divisions)
+    if 'excel_keyword_data' in st.session_state:
+        display_data_visualizations(st.session_state['excel_keyword_data'], "All Divisions")
 
-    # Division-Specific Problem Frequency
-    st.write("## Division-Specific Problem Frequency")
-    problem_freq = filtered_data['Division'].value_counts()
-    fig, ax = plt.subplots()
-    sns.barplot(x=problem_freq.index, y=problem_freq.values, ax=ax)
-    ax.set_xlabel('Division')
-    ax.set_ylabel('Frequency')
-    ax.set_title('Problem Frequency by Division')
-    st.pyplot(fig)
+    # Display keywords for Excel data
+    if 'excel_short_tail_keywords' in st.session_state and 'excel_long_tail_keywords' in st.session_state:
+        display_keywords(st.session_state['excel_short_tail_keywords'], st.session_state['excel_long_tail_keywords'], "Excel Data")
 
-    # Sentiment Analysis for Each Cluster in Excel data
-    st.write("## Sentiment Analysis for Each Cluster in Excel Data")
-    sentiments = [analyze_sentiment(text) for text in excel_texts]
-    sentiment_df = pd.DataFrame(sentiments)
-    st.write(sentiment_df.describe())
+# Web scraping insights
+if 'web_insights' in st.session_state:
+    st.header("Web Scraping")
 
-    # Inter-Cluster Similarity for Excel data
-    st.write("## Inter-Cluster Similarity for Excel Data")
-    similarity_matrix = cosine_similarity(filtered_data['Processed_Text'].apply(lambda x: np.array(x.split(), dtype=float)))
-    fig, ax = plt.subplots()
-    sns.heatmap(similarity_matrix, cmap='viridis', ax=ax)
-    ax.set_title('Inter-Cluster Similarity')
-    st.pyplot(fig)
+    # Top 10 problems LRMG solves based on website
+    if 'web_problems' in st.session_state:
+        st.subheader("Top 10 Problems LRMG Solves Based on Website")
+        for problem in st.session_state['web_problems']:
+            st.write(f"- {problem}")
 
-    # Combined Keyword Analysis from Web and Excel Data
-    web_texts = st.session_state.get('web_texts', [])
-    if web_texts:
-        all_texts = web_texts + excel_texts
-        st.write("## Combined Keyword Analysis from Web and Excel Data")
-        keyword_counts = extract_keywords(all_texts, n=20)
-        short_tail_keywords = keyword_counts[keyword_counts['Keyword'].str.split().str.len() == 1]
-        long_tail_keywords = keyword_counts[keyword_counts['Keyword'].str.split().str.len() > 1]
+    # Clusters based on website
+    if 'web_clusters' in st.session_state:
+        st.subheader("Clusters Based on Website")
+        display_consolidated_clusters(st.session_state['web_clusters'])
 
-        st.write("### Combined Short-Tail Keywords")
-        st.write(short_tail_keywords)
+    # Consolidated data visualizations for web scraping
+    if 'web_keyword_data' in st.session_state:
+        display_data_visualizations(st.session_state['web_keyword_data'], "Web Scraping")
 
-        st.write("### Combined Long-Tail Keywords")
-        st.write(long_tail_keywords)
+    # Display keywords for web data
+    if 'web_short_tail_keywords' in st.session_state and 'web_long_tail_keywords' in st.session_state:
+        display_keywords(st.session_state['web_short_tail_keywords'], st.session_state['web_long_tail_keywords'], "Web Data")
 
-        fig, ax = plt.subplots()
-        sns.barplot(x='Count', y='Keyword', data=keyword_counts, ax=ax)
-        ax.set_xlabel('Count')
-        ax.set_ylabel('Keyword')
-        ax.set_title('Combined Keyword Counts from Web and Excel Data')
-        st.pyplot(fig)
+# Message if no data is available
+if 'excel_insights' not in st.session_state and 'web_insights' not in st.session_state:
+    st.write("No data available. Please upload data on the Data Page.")

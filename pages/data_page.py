@@ -157,92 +157,107 @@ st.title("Text Analysis with GPT-4")
 url = st.text_input("Enter a URL to scrape data:")
 uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx"])
 
-# Submit button
-if st.button("Submit"):
-    # Initialize lists to store text data for keyword extraction
-    web_texts = []
-    excel_texts = []
+# Check for previously stored data
+if 'filtered_data' not in st.session_state or 'excel_texts' not in st.session_state:
+    # Display a button to allow the user to process the data
+    if st.button("Submit"):
+        # Initialize lists to store text data for keyword extraction
+        web_texts = []
+        excel_texts = []
 
-    # Check if URL is provided for scraping
-    if url:
-        scraped_data = scrape_website(url)
-        if scraped_data:
-            for page, text in scraped_data.items():
-                st.write(f"### Scraped Content from {page}")
-                st.write(text)
-                web_texts.append(text)
+        # Check if URL is provided for scraping
+        if url:
+            scraped_data = scrape_website(url)
+            if scraped_data:
+                for page, text in scraped_data.items():
+                    st.write(f"### Scraped Content from {page}")
+                    st.write(text)
+                    web_texts.append(text)
+                    
+                    # Use LLM to generate insights from scraped text
+                    web_insights = generate_web_insights(text)
+                    st.write(f"#### Insights for {page}")
+                    st.write(web_insights)
+
+                # Store web scraped data insights
+                st.session_state['web_texts'] = web_texts
+
+        # Check if an Excel file is uploaded
+        if uploaded_file is not None:
+            # Load Excel data
+            @st.cache_data
+            def load_data(file):
+                data = pd.read_excel(file)
+                data.fillna("", inplace=True)  # Fill NaN values with empty strings
+                return data
+
+            data = load_data(uploaded_file)
+
+            # Clean division names
+            data = clean_division_names(data)
+
+            # Display division options and filter data
+            division_options = data['Division'].unique()
+            selected_division = st.selectbox("Select a Division:", division_options)
+            filtered_data = data[data['Division'] == selected_division]
+
+            # Combine all relevant columns into one
+            filtered_data['All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
+            filtered_data['Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
+            excel_texts = filtered_data['Processed_Text'].tolist()
+
+            # Perform text vectorization using TF-IDF
+            vectorizer = TfidfVectorizer(stop_words='english')
+            X = vectorizer.fit_transform(filtered_data['Processed_Text'])
+
+            # Perform KMeans clustering
+            num_clusters = st.slider('Select number of clusters:', 2, 10, 3)
+            kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init='auto')
+            kmeans.fit(X)
+
+            filtered_data['Cluster'] = kmeans.labels_
+
+            # Initialize a list to store cluster labels
+            cluster_labels = []
+
+            # Generate labels for each cluster
+            for cluster_num in range(num_clusters):
+                cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_                Problems'].tolist()
+                cluster_label = generate_cluster_label(' '.join(cluster_data))
+                cluster_labels.append(cluster_label)
+
+            # Store results in session state
+            st.session_state['filtered_data'] = filtered_data
+            st.session_state['cluster_labels'] = cluster_labels
+            st.session_state['excel_texts'] = excel_texts
+            st.session_state['excel_clusters'] = num_clusters
+
+            # Display the processed data and insights
+            st.write("## Processed Data for Excel")
+            st.write(filtered_data)
+
+            for cluster_num in range(num_clusters):
+                st.write(f"### Cluster {cluster_num + 1}: {cluster_labels[cluster_num]}")
+                cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
+                insights = generate_insights(' '.join(cluster_data))
+                st.write(insights)
                 
-                # Use LLM to generate insights from scraped text
-                web_insights = generate_web_insights(text)
-                st.write(f"#### Insights for {page}")
-                st.write(web_insights)
+            # Save insights for later use in the insights dashboard
+            st.session_state['excel_insights'] = insights
 
-            # Store web scraped data insights
-            st.session_state['web_texts'] = web_texts
+else:
+    # Load the data from session state
+    filtered_data = st.session_state['filtered_data']
+    cluster_labels = st.session_state['cluster_labels']
+    excel_texts = st.session_state['excel_texts']
+    num_clusters = st.session_state['excel_clusters']
+    
+    st.write("## Processed Data for Excel")
+    st.write(filtered_data)
 
-    # Check if an Excel file is uploaded
-    if uploaded_file is not None:
-        # Load Excel data
-        @st.cache_data
-        def load_data(file):
-            data = pd.read_excel(file)
-            data.fillna("", inplace=True)  # Fill NaN values with empty strings
-            return data
-
-        data = load_data(uploaded_file)
-
-        # Clean division names
-        data = clean_division_names(data)
-
-        # Display division options and filter data
-        division_options = data['Division'].unique()
-        selected_division = st.selectbox("Select a Division:", division_options)
-        filtered_data = data[data['Division'] == selected_division]
-
-        # Combine all relevant columns into one
-        filtered_data['All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
-        filtered_data['Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
-        excel_texts = filtered_data['Processed_Text'].tolist()
-
-        # Perform text vectorization using TF-IDF
-        vectorizer = TfidfVectorizer(stop_words='english')
-        X = vectorizer.fit_transform(filtered_data['Processed_Text'])
-
-        # Perform KMeans clustering
-        num_clusters = st.slider('Select number of clusters:', 2, 10, 3)
-        kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init='auto')
-        kmeans.fit(X)
-
-        filtered_data['Cluster'] = kmeans.labels_
-
-        # Initialize a list to store cluster labels
-        cluster_labels = []
-
-        # Generate labels for each cluster
-        for cluster_num in range(num_clusters):
-            cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
-            cluster_label = generate_cluster_label(' '.join(cluster_data))
-            cluster_labels.append(cluster_label)
-
-        # Store results in session state
-        st.session_state['filtered_data'] = filtered_data
-        st.session_state['cluster_labels'] = cluster_labels
-        st.session_state['excel_texts'] = excel_texts
-        st.session_state['excel_clusters'] = num_clusters
-
-        # Display the processed data and insights
-        st.write("## Processed Data for Excel")
-        st.write(filtered_data)
-
-        # Display insights for each cluster
-        for cluster_num in range(num_clusters):
-            st.write(f"### Cluster {cluster_num + 1}: {cluster_labels[cluster_num]}")
-            cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
-            insights = generate_insights(' '.join(cluster_data))
-            st.write(insights)
-
-        # Save insights for later use in the insights dashboard
-        st.session_state['excel_insights'] = [generate_insights(' '.join(filtered_data[filtered_data['Cluster'] == i]['All_Problems'].tolist())) for i in range(num_clusters)]
-
-        st.write("Data has been processed and saved. Navigate to the Insights Dashboard for visualization.")
+    for cluster_num in range(num_clusters):
+        st.write(f"### Cluster {cluster_num + 1}: {cluster_labels[cluster_num]}")
+        cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
+        insights = generate_insights(' '.join(cluster_data))
+        st.write(insights)
 
