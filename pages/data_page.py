@@ -70,143 +70,139 @@ def generate_cluster_label(text):
 def analyze_sentiment(text):
     return sia.polarity_scores(text)
 
-# Function to scrape text data from a URL
+# Function to scrape website
 def scrape_website(url):
     try:
-        response = requests.get(url)
+        response = requests.get(url, verify=False)  # Disable SSL verification
         response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        texts = soup.find_all(text=True)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        texts = soup.findAll(text=True)
         visible_texts = filter(tag_visible, texts)
-        return u" ".join(t.strip() for t in visible_texts)
+        return " ".join(t.strip() for t in visible_texts)
     except requests.exceptions.RequestException as e:
         st.error(f"Error fetching the URL: {e}")
-        return ""
+        return None
 
 def tag_visible(element):
     if element.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]']:
         return False
-    if isinstance(element, str):
-        return True
-    return False
+    if isinstance(element, Comment):
+        return False
+    return True
 
 # Streamlit UI
-st.title("Data Page")
-st.write("Upload and analyze your data here or scrape data from a website.")
-
-# File uploader
-uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx"])
+st.title("Text Analysis with GPT-4")
 
 # URL input for scraping
-url_input = st.text_input("Or enter a URL to scrape:")
+url = st.text_input("Enter a URL to scrape data:")
+uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx"])
 
-if url_input:
-    scraped_text = scrape_website(url_input)
-    st.write("### Scraped Website Text")
-    st.write(scraped_text)
-    data = pd.DataFrame({"Scraped_Text": [scraped_text]})
-    data['Processed_Text'] = data['Scraped_Text'].apply(preprocess_text)
+# Submit button
+if st.button("Submit"):
+    # Check if URL is provided for scraping
+    if url:
+        scraped_text = scrape_website(url)
+        if scraped_text:
+            st.write("Scraped Text:")
+            st.write(scraped_text)
+            # Further processing of scraped text...
 
-elif uploaded_file:
-    # Load Excel data
-    @st.cache_data
-    def load_data(file):
-        data = pd.read_excel(file)
-        data.fillna("", inplace=True)  # Fill NaN values with empty strings
-        return data
+    # Check if an Excel file is uploaded
+    if uploaded_file is not None:
+        # Load Excel data
+        @st.cache_data
+        def load_data(file):
+            data = pd.read_excel(file)
+            data.fillna("", inplace=True)  # Fill NaN values with empty strings
+            return data
 
-    data = load_data(uploaded_file)
+        data = load_data(uploaded_file)
 
-    # Display division options and filter data
-    division_options = data['Division (TD, TT, TA, Impactful)'].unique()
-    selected_division = st.selectbox("Select a Division:", division_options)
-    filtered_data = data[data['Division (TD, TT, TA, Impactful)'] == selected_division]
+        # Display division options and filter data
+        division_options = data['Division (TD, TT, TA, Impactful)'].unique()
+        selected_division = st.selectbox("Select a Division:", division_options)
+        filtered_data = data[data['Division (TD, TT, TA, Impactful)'] == selected_division]
 
-    # Combine all relevant columns into one
-    filtered_data.loc[:, 'All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
-    filtered_data.loc[:, 'Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
+        # Combine all relevant columns into one
+        filtered_data.loc[:, 'All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
+        filtered_data.loc[:, 'Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
 
-    # Perform text vectorization using TF-IDF
-    vectorizer = TfidfVectorizer(stop_words='english')
-    X = vectorizer.fit_transform(filtered_data['Processed_Text'])
+        # Perform text vectorization using TF-IDF
+        vectorizer = TfidfVectorizer(stop_words='english')
+        X = vectorizer.fit_transform(filtered_data['Processed_Text'])
 
-    # Perform KMeans clustering
-    num_clusters = st.slider('Select number of clusters:', 2, 10, 3)
-    kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init='auto')
-    kmeans.fit(X)
+        # Perform KMeans clustering
+        num_clusters = st.slider('Select number of clusters:', 2, 10, 3)
+        kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init='auto')
+        kmeans.fit(X)
 
-    filtered_data.loc[:, 'Cluster'] = kmeans.labels_
+        filtered_data.loc[:, 'Cluster'] = kmeans.labels_
 
-    # Initialize a list to store cluster labels
-    cluster_labels = []
+        # Initialize a list to store cluster labels
+        cluster_labels = []
 
-    # Generate labels for each cluster
-    for cluster_num in range(num_clusters):
-        cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
-        cluster_label = generate_cluster_label(' '.join(cluster_data))
-        cluster_labels.append(cluster_label)
+        # Generate labels for each cluster
+        for cluster_num in range(num_clusters):
+            cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
+            cluster_label = generate_cluster_label(' '.join(cluster_data))
+            cluster_labels.append(cluster_label)
 
-    # Display clusters, insights, and visualizations
-    for cluster_num in range(num_clusters):
-        st.write(f"### Cluster {cluster_num + 1}: {cluster_labels[cluster_num]}")
-        cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
-        insights = generate_insights(' '.join(cluster_data))
-        st.write(insights)
+        # Display clusters, insights, and visualizations
+        for cluster_num in range(num_clusters):
+            st.write(f"### Cluster {cluster_num + 1}: {cluster_labels[cluster_num]}")
+            cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
+            insights = generate_insights(' '.join(cluster_data))
+            st.write(insights)
 
-        # Keyword Counts in Each Cluster
-        cluster_data_processed = filtered_data[filtered_data['Cluster'] == cluster_num]['Processed_Text'].tolist()
-        count_vectorizer = CountVectorizer(stop_words='english', max_features=10)
-        X_cluster = count_vectorizer.fit_transform(cluster_data_processed)
-        keywords = count_vectorizer.get_feature_names_out()
-        counts = X_cluster.toarray().sum(axis=0)
-        keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
+            # Keyword Counts in Each Cluster
+            cluster_data_processed = filtered_data[filtered_data['Cluster'] == cluster_num]['Processed_Text'].tolist()
+            count_vectorizer = CountVectorizer(stop_words='english', max_features=10)
+            X_cluster = count_vectorizer.fit_transform(cluster_data_processed)
+            keywords = count_vectorizer.get_feature_names_out()
+            counts = X_cluster.toarray().sum(axis=0)
+            keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
 
-        # Plotting the keyword counts
+            # Plotting the keyword counts
+            fig, ax = plt.subplots()
+            sns.barplot(x='Count', y='Keyword', data=keyword_counts, ax=ax)
+            ax.set_xlabel('Count')
+            ax.set_ylabel('Keyword')
+            ax.set_title(f'Keyword Counts for Cluster {cluster_num + 1}')
+            st.pyplot(fig)
+
+            # Sentiment Analysis for Each Cluster
+            sentiments = [analyze_sentiment(text) for text in cluster_data]
+            sentiment_df = pd.DataFrame(sentiments)
+            st.write(f"Sentiment Analysis for Cluster {cluster_num + 1}")
+            st.write(sentiment_df.describe())
+
+        # Division-Specific Problem Frequency
+        st.write("### Division-Specific Problem Frequency")
+        problem_freq = filtered_data['Division (TD, TT, TA, Impactful)'].value_counts()
         fig, ax = plt.subplots()
-        sns.barplot(x='Count', y='Keyword', data=keyword_counts, ax=ax)
-        ax.set_xlabel('Count')
-        ax.set_ylabel('Keyword')
-        ax.set_title(f'Keyword Counts for Cluster {cluster_num + 1}')
+        sns.barplot(x=problem_freq.index, y=problem_freq.values, ax=ax)
+        ax.set_xlabel('Division')
+        ax.set_ylabel('Frequency')
+        ax.set_title('Problem Frequency by Division')
         st.pyplot(fig)
 
-        # Sentiment Analysis for Each Cluster
-        sentiments = [analyze_sentiment(text) for text in cluster_data]
-        sentiment_df = pd.DataFrame(sentiments)
-        st.write(f"Sentiment Analysis for Cluster {cluster_num + 1}")
-        st.write(sentiment_df.describe())
+        # Cluster Distribution
+        st.write("### Cluster Distribution")
+        cluster_counts = filtered_data['Cluster'].value_counts()
+        fig, ax = plt.subplots()
+        sns.barplot(x=cluster_counts.index, y=cluster_counts.values, ax=ax)
+        ax.set_xlabel('Cluster')
+        ax.set_ylabel('Number of Responses')
+        ax.set_title('Distribution of Responses Across Clusters')
+        st.pyplot(fig)
 
-    # Division-Specific Problem Frequency
-    st.write("### Division-Specific Problem Frequency")
-    problem_freq = filtered_data['Division (TD, TT, TA, Impactful)'].value_counts()
-    fig, ax = plt.subplots()
-    sns.barplot(x=problem_freq.index, y=problem_freq.values, ax=ax)
-    ax.set_xlabel('Division')
-    ax.set_ylabel('Frequency')
-    ax.set_title('Problem Frequency by Division')
-    st.pyplot(fig)
+        # Inter-Cluster Similarity
+        st.write("### Inter-Cluster Similarity")
+        similarity_matrix = cosine_similarity(X)
+        fig, ax = plt.subplots()
+        sns.heatmap(similarity_matrix, cmap='viridis', ax=ax)
+        ax.set_title('Inter-Cluster Similarity')
+        st.pyplot(fig)
 
-    # Cluster Distribution
-    st.write("### Cluster Distribution")
-    cluster_counts = filtered_data['Cluster'].value_counts()
-    fig, ax = plt.subplots()
-    sns.barplot(x=cluster_counts.index, y=cluster_counts.values, ax=ax)
-    ax.set_xlabel('Cluster')
-    ax.set_ylabel('Number of Responses')
-    ax.set_title('Distribution of Responses Across Clusters')
-    st.pyplot(fig)
-
-    # Inter-Cluster Similarity
-    st.write("### Inter-Cluster Similarity")
-    similarity_matrix = cosine_similarity(X)
-    fig, ax = plt.subplots()
-    sns.heatmap(similarity_matrix, cmap='viridis', ax=ax)
-    ax.set_title('Inter-Cluster Similarity')
-    st.pyplot
-    st.pyplot(fig)
-
-    # Display the processed data
-    st.write("### Processed Data")
-    st.write(filtered_data)
-
-# Ensure the end of the script is tidy
-st.write("Use the navigation options to switch between pages.")
+        # Display the processed data
+        st.write(filtered_data)
