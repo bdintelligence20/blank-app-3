@@ -158,7 +158,7 @@ url = st.text_input("Enter a URL to scrape data:")
 uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx"])
 
 # Check for previously stored data
-if 'filtered_data' not in st.session_state or 'excel_texts' not in st.session_state:
+if 'filtered_data' not in st.session_state or 'excel_texts' not in st.session_state or 'web_texts' not in st.session_state:
     # Display a button to allow the user to process the data
     if st.button("Submit"):
         # Initialize lists to store text data for keyword extraction
@@ -181,6 +181,7 @@ if 'filtered_data' not in st.session_state or 'excel_texts' not in st.session_st
 
                 # Store web scraped data insights
                 st.session_state['web_texts'] = web_texts
+                st.session_state['web_insights'] = [generate_web_insights(text) for text in web_texts]
 
         # Check if an Excel file is uploaded
         if uploaded_file is not None:
@@ -231,6 +232,7 @@ if 'filtered_data' not in st.session_state or 'excel_texts' not in st.session_st
             st.session_state['cluster_labels'] = cluster_labels
             st.session_state['excel_texts'] = excel_texts
             st.session_state['excel_clusters'] = num_clusters
+            st.session_state['excel_insights'] = [generate_insights(' '.join(filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist())) for cluster_num in range(num_clusters)]
 
             # Display the processed data and insights
             st.write("## Processed Data for Excel")
@@ -242,16 +244,16 @@ if 'filtered_data' not in st.session_state or 'excel_texts' not in st.session_st
                 insights = generate_insights(' '.join(cluster_data))
                 st.write(insights)
 
-            # Save insights for later use in the insights dashboard
-            st.session_state['excel_insights'] = insights
-
 else:
     # Load the data from session state
     filtered_data = st.session_state['filtered_data']
     cluster_labels = st.session_state['cluster_labels']
     excel_texts = st.session_state['excel_texts']
     num_clusters = st.session_state['excel_clusters']
-    
+    web_texts = st.session_state['web_texts'] if 'web_texts' in st.session_state else []
+    web_insights = st.session_state['web_insights'] if 'web_insights' in st.session_state else []
+
+    # Display previously processed data
     st.write("## Processed Data for Excel")
     st.write(filtered_data)
 
@@ -260,3 +262,12 @@ else:
         cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
         insights = generate_insights(' '.join(cluster_data))
         st.write(insights)
+
+    # Display web scraping results if available
+    if web_texts:
+        for i, text in enumerate(web_texts):
+            st.write(f"### Scraped Content {i + 1}")
+            st.write(text)
+            st.write(f"#### Insights for Scraped Content {i + 1}")
+            st.write(web_insights[i])
+
