@@ -12,6 +12,7 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import nltk
 import requests
 from bs4 import BeautifulSoup
+from bs4.element import Comment 
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
