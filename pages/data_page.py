@@ -11,6 +11,8 @@ import requests
 from bs4 import BeautifulSoup
 from bs4.element import Comment
 import time
+from google.ads.googleads.client import GoogleAdsClient
+from google.ads.googleads.errors import GoogleAdsException
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -21,11 +23,29 @@ nlp = spacy.load("en_core_web_sm")
 # Initialize NLTK's SentimentIntensityAnalyzer
 sia = SentimentIntensityAnalyzer()
 
-# Access the API key from Streamlit secrets
+# Access API keys from Streamlit secrets
 api_key = st.secrets["openai"]["api_key"]
+developer_token = st.secrets["google_api"]["developer_token"]
+client_id = st.secrets["google_api"]["client_id"]
+client_secret = st.secrets["google_api"]["client_secret"]
+refresh_token = st.secrets["google_api"]["refresh_token"]
 
 # Initialize OpenAI client
 client = OpenAI(api_key=api_key)
+
+# Function to initialize Google Ads client
+def initialize_google_ads_client():
+    client = GoogleAdsClient.load_from_dict({
+        "developer_token": developer_token,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh_token,
+        "use_proto_plus": True
+    })
+    return client
+
+# Initialize Google Ads client
+google_ads_client = initialize_google_ads_client()
 
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
@@ -110,11 +130,31 @@ def generate_comprehensive_keywords(text):
     return response.choices[0].message.content.strip().split('\n')
 
 # Function to fetch keyword search volumes using Google Keyword Planner API
-def fetch_keyword_search_volume(keywords):
-    # Placeholder function: Replace with actual implementation to use Google Keyword Planner API
-    # This function should return a dictionary with keywords and their corresponding search volumes
-    search_volumes = {keyword: 'Volume Placeholder' for keyword in keywords}
-    return search_volumes
+def fetch_keyword_search_volume(client, customer_id, keywords):
+    try:
+        keyword_plan_idea_service = client.get_service("KeywordPlanIdeaService")
+
+        request = client.get_type("GenerateKeywordIdeasRequest")
+        request.customer_id = customer_id
+        request.language = client.get_service("GoogleAdsService").language_constants["1000"]  # English language ID
+        request.geo_target_constants.extend(
+            [client.get_service("GoogleAdsService").geo_target_constants["2840"]]  # US location ID
+        )
+        request.keyword_seed.keywords.extend(keywords)
+
+        response = keyword_plan_idea_service.generate_keyword_ideas(request=request)
+
+        search_volumes = {}
+        for idea in response.results:
+            search_volumes[idea.text] = idea.keyword_idea_metrics.avg_monthly_searches
+
+        return search_volumes
+
+    except GoogleAdsException as ex:
+        st.error(f"Request with ID '{ex.request_id}' failed with status '{ex.error.code().name}' and includes the following errors:")
+        for error in ex.failure.errors:
+            st.error(f"\tError with message '{error.message}'.")
+        return {}
 
 # Function to check if a tag is visible
 def tag_visible(element):
@@ -160,6 +200,7 @@ def scrape_website(url):
     
     return scraped_data
 
+# Function to extract keywords from text data
 # Function to extract keywords from text data
 def extract_keywords(texts, n=10):
     vectorizer = CountVectorizer(stop_words='english', ngram_range=(1, 3))
@@ -313,7 +354,7 @@ if st.button("Submit"):
         st.write(all_keywords)
 
         # Fetch search volumes for the keywords and key phrases using Google Keyword Planner API
-        keyword_search_volumes = fetch_keyword_search_volume(all_keywords)
+        keyword_search_volumes = fetch_keyword_search_volume(google_ads_client, '510-932-1064', all_keywords)
         st.write("### Keyword and Key Phrase Search Volumes")
         st.write(keyword_search_volumes)
 
@@ -367,6 +408,8 @@ else:
                            st.session_state['excel_long_tail_keywords']['Keyword'].tolist()
 
             # Fetch search volumes for the keywords and key phrases using Google Keyword Planner API
-            keyword_search_volumes = fetch_keyword_search_volume(all_keywords)
+            keyword_search_volumes = fetch_keyword_search_volume(google_ads_client, '510-932-1064', all_keywords)
             st.write("### Keyword and Key Phrase Search Volumes")
             st.write(keyword_search_volumes)
+
+

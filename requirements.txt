@@ -13,3 +13,4 @@ matplotlib
 seaborn
 requests
 bs4
+google-ads
