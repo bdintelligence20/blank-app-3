@@ -3,11 +3,8 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.cluster import KMeans
-from sklearn.metrics.pairwise import cosine_similarity
 from openai import OpenAI
 import spacy
-import matplotlib.pyplot as plt
-import seaborn as sns
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import nltk
 import requests
@@ -160,187 +157,70 @@ st.title("Text Analysis with GPT-4")
 url = st.text_input("Enter a URL to scrape data:")
 uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx"])
 
-# Submit button
-if st.button("Submit"):
-    # Initialize lists to store text data for keyword extraction
-    web_texts = []
-    excel_texts = []
+# Initialize lists to store text data for keyword extraction
+web_texts = []
+excel_texts = []
 
-    # Check if URL is provided for scraping
-    if url:
-        scraped_data = scrape_website(url)
-        if scraped_data:
-            for page, text in scraped_data.items():
-                st.write(f"### Scraped Content from {page}")
-                st.write(text)
-                web_texts.append(text)
-                
-                # Use LLM to generate insights from scraped text
-                web_insights = generate_web_insights(text)
-                st.write(f"#### Insights for {page}")
-                st.write(web_insights)
+# Check if URL is provided for scraping
+if url:
+    scraped_data = scrape_website(url)
+    if scraped_data:
+        for page, text in scraped_data.items():
+            st.write(f"### Scraped Content from {page}")
+            st.write(text)
+            web_texts.append(text)
 
-            # Keyword extraction and visualization for web scraped data
-            if web_texts:
-                st.write("### Keyword Analysis for Web Scraped Data")
-                keyword_counts = extract_keywords(web_texts, n=20)
-                st.write(keyword_counts)
+            # Use LLM to generate insights from scraped text
+            web_insights = generate_web_insights(text)
+            st.write(f"#### Insights for {page}")
+            st.write(web_insights)
 
-                # Plotting the keyword counts for web scraped data
-                fig, ax = plt.subplots()
-                sns.barplot(x='Count', y='Keyword', data=keyword_counts, ax=ax)
-                ax.set_xlabel('Count')
-                ax.set_ylabel('Keyword')
-                ax.set_title('Keyword Counts for Web Scraped Data')
-                st.pyplot(fig)
+# Check if an Excel file is uploaded
+if uploaded_file is not None:
+    # Load Excel data
+    @st.cache_data
+    def load_data(file):
+        data = pd.read_excel(file)
+        data.fillna("", inplace=True)  # Fill NaN values with empty strings
+        return data
 
-    # Check if an Excel file is uploaded
-    if uploaded_file is not None:
-        # Load Excel data
-        @st.cache_data
-        def load_data(file):
-            data = pd.read_excel(file)
-            data.fillna("", inplace=True)  # Fill NaN values with empty strings
-            return data
+    data = load_data(uploaded_file)
 
-        data = load_data(uploaded_file)
+    # Clean division names
+    data = clean_division_names(data)
 
-        # Clean division names
-        data = clean_division_names(data)
+    # Display division options and filter data
+    division_options = data['Division'].unique()
+    selected_division = st.selectbox("Select a Division:", division_options)
+    filtered_data = data[data['Division'] == selected_division]
 
-        # Display division options and filter data
-        division_options = data['Division'].unique()
-        selected_division = st.selectbox("Select a Division:", division_options)
-        filtered_data = data[data['Division'] == selected_division]
+    # Combine all relevant columns into one
+    filtered_data['All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
+    filtered_data['Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
+    excel_texts = filtered_data['Processed_Text'].tolist()
 
-        # Combine all relevant columns into one
-        filtered_data['All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
-        filtered_data['Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
-        excel_texts = filtered_data['Processed_Text'].tolist()
+    # Perform text vectorization using TF-IDF
+    vectorizer = TfidfVectorizer(stop_words='english')
+    X = vectorizer.fit_transform(filtered_data['Processed_Text'])
 
-        # Perform text vectorization using TF-IDF
-        vectorizer = TfidfVectorizer(stop_words='english')
-        X = vectorizer.fit_transform(filtered_data['Processed_Text'])
+    # Perform KMeans clustering
+    num_clusters = st.slider('Select number of clusters:', 2, 10, 3)
+    kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init='auto')
+    kmeans.fit(X)
 
-        # Perform KMeans clustering
-        num_clusters = st.slider('Select number of clusters:', 2, 10, 3)
-        kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init='auto')
-        kmeans.fit(X)
+    filtered_data['Cluster'] = kmeans.labels_
 
-        filtered_data['Cluster'] = kmeans.labels_
+    # Initialize a list to store cluster labels
+    cluster_labels = []
 
-        # Initialize a list to store cluster labels
-        cluster_labels = []
+    # Generate labels for each cluster
+    for cluster_num in range(num_clusters):
+        cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
+        cluster_label = generate_cluster_label(' '.join(cluster_data))
+        cluster_labels.append(cluster_label)
 
-        # Generate labels for each cluster
-        for cluster_num in range(num_clusters):
-            cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
-            cluster_label = generate_cluster_label(' '.join(cluster_data))
-            cluster_labels.append(cluster_label)
-
-        # Display clusters, insights, and visualizations for Excel data
-        for cluster_num in range(num_clusters):
-            st.write(f"### Cluster {cluster_num + 1}: {cluster_labels[cluster_num]}")
-            cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
-            insights = generate_insights(' '.join(cluster_data))
-            st.write(insights)
-
-            # Keyword Counts in Each Cluster for Excel data
-            cluster_data_processed = filtered_data[filtered_data['Cluster'] == cluster_num]['Processed_Text'].tolist()
-            count_vectorizer = CountVectorizer(stop_words='english', max_features=10)
-            X_cluster = count_vectorizer.fit_transform(cluster_data_processed)
-            keywords = count_vectorizer.get_feature_names_out()
-            counts = X_cluster.toarray().sum(axis=0)
-            keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
-
-            # Plotting the keyword counts for each cluster in Excel data
-            fig, ax = plt.subplots()
-            sns.barplot(x='Count', y='Keyword', data=keyword_counts, ax=ax)
-            ax.set_xlabel('Count')
-            ax.set_ylabel('Keyword')
-            ax.set_title(f'Keyword Counts for Cluster {cluster_num + 1}')
-            st.pyplot(fig)
-
-            # Sentiment Analysis for Each Cluster in Excel data
-            sentiments = [analyze_sentiment(text) for text in cluster_data]
-            sentiment_df = pd.DataFrame(sentiments)
-            st.write(f"Sentiment Analysis for Cluster {cluster_num + 1}")
-            st.write(sentiment_df.describe())
-
-        # Division-Specific Problem Frequency for Excel data
-        st.write("### Division-Specific Problem Frequency")
-        problem_freq = filtered_data['Division'].value_counts()
-        fig, ax = plt.subplots()
-        sns.barplot(x=problem_freq.index, y=problem_freq.values, ax=ax)
-        ax.set_xlabel('Division')
-        ax.set_ylabel('Frequency')
-        ax.set_title('Problem Frequency by Division')
-        st.pyplot(fig)
-
-        # Cluster Distribution for Excel data
-        st.write("### Cluster Distribution")
-        cluster_counts = filtered_data['Cluster'].value_counts()
-        fig, ax = plt.subplots()
-        sns.barplot(x=cluster_counts.index, y=cluster_counts.values, ax=ax)
-        ax.set_xlabel('Cluster')
-        ax.set_ylabel('Number of Responses')
-        ax.set_title('Distribution of Responses Across Clusters')
-        st.pyplot(fig)
-
-        # Inter-Cluster Similarity for Excel data
-        st.write("### Inter-Cluster Similarity")
-        similarity_matrix = cosine_similarity(X)
-        fig, ax = plt.subplots()
-        sns.heatmap(similarity_matrix, cmap='viridis', ax=ax)
-        ax.set_title('Inter-Cluster Similarity')
-        st.pyplot(fig)
-
-        # Display the processed data for Excel data
-        st.write(filtered_data)
-
-        # Keyword extraction and visualization for Excel data
-        if excel_texts:
-            st.write("### Keyword Analysis for Excel Data")
-            keyword_counts = extract_keywords(excel_texts, n=20)
-            
-            # Separating short-tail and long-tail keywords
-            short_tail_keywords = keyword_counts[keyword_counts['Keyword'].str.split().str.len() == 1]
-            long_tail_keywords = keyword_counts[keyword_counts['Keyword'].str.split().str.len() > 1]
-
-            st.write("#### Short-Tail Keywords")
-            st.write(short_tail_keywords)
-
-            st.write("#### Long-Tail Keywords")
-            st.write(long_tail_keywords)
-
-            # Plotting the keyword counts for Excel data
-            fig, ax = plt.subplots()
-            sns.barplot(x='Count', y='Keyword', data=keyword_counts, ax=ax)
-            ax.set_xlabel('Count')
-            ax.set_ylabel('Keyword')
-            ax.set_title('Keyword Counts for Excel Data')
-            st.pyplot(fig)
-
-    # Keyword extraction and visualization for both data sources
-    all_texts = web_texts + excel_texts
-    if all_texts:
-        st.write("### Combined Keyword Analysis from Web and Excel Data")
-        keyword_counts = extract_keywords(all_texts, n=20)
-        
-        # Separating short-tail and long-tail keywords
-        short_tail_keywords = keyword_counts[keyword_counts['Keyword'].str.split().str.len() == 1]
-        long_tail_keywords = keyword_counts[keyword_counts['Keyword'].str.split().str.len() > 1]
-
-        st.write("#### Combined Short-Tail Keywords")
-        st.write(short_tail_keywords)
-
-        st.write("#### Combined Long-Tail Keywords")
-        st.write(long_tail_keywords)
-
-        # Plotting the combined keyword counts
-        fig, ax = plt.subplots()
-        sns.barplot(x='Count', y='Keyword', data=keyword_counts, ax=ax)
-        ax.set_xlabel('Count')
-        ax.set_ylabel('Keyword')
-        ax.set_title('Combined Keyword Counts from Web and Excel Data')
-        st.pyplot(fig)
+    # Add cluster data to Streamlit session state for visualization on Insights Dashboard
+    st.session_state['cluster_data'] = filtered_data
+    st.session_state['cluster_labels'] = cluster_labels
+    st.session_state['excel_texts'] = excel_texts
+    st.session_state['web_texts'] = web_texts
