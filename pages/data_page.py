@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 import pandas as pd
+import sqlite3
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.cluster import KMeans
 from openai import OpenAI
@@ -172,15 +173,19 @@ if st.button("Submit"):
                 st.write(f"#### Insights for {page}")
                 st.write(web_insights)
 
-            # Store web data in session state
-            st.session_state['web_texts'] = web_texts
-            st.session_state['web_insights'] = [generate_web_insights(text) for text in web_texts]
-
             # Extract keywords for web scraped data
             if web_texts:
                 keyword_counts = extract_keywords(web_texts, n=20)
                 st.write("### Short-Tail and Long-Tail Keywords for Web Scraped Data")
                 st.write(keyword_counts)
+
+                # Save keywords to session state
+                st.session_state['web_short_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() == 1]
+                st.session_state['web_long_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() > 1]
+
+            # Save web scraped data and insights to session state
+            st.session_state['web_texts'] = web_texts
+            st.session_state['web_insights'] = [generate_web_insights(text) for text in web_texts]
 
     # Check if an Excel file is uploaded
     if uploaded_file is not None:
@@ -225,11 +230,12 @@ if st.button("Submit"):
             cluster_label = generate_cluster_label(' '.join(cluster_data))
             cluster_labels.append(cluster_label)
 
-        # Store Excel data in session state
+        # Save Excel data and insights to session state
         st.session_state['filtered_data'] = data
         st.session_state['cluster_labels'] = cluster_labels
         st.session_state['excel_texts'] = excel_texts
         st.session_state['excel_clusters'] = num_clusters
+        st.session_state['excel_insights'] = [generate_insights(' '.join(data[data['Cluster'] == cluster_num]['All_Problems'].tolist())) for cluster_num in range(num_clusters)]
 
         # Display the processed data and insights without filtering
         st.write("## Processed Data for Excel")
@@ -247,27 +253,51 @@ if st.button("Submit"):
             st.write("### Short-Tail and Long-Tail Keywords for Excel Data")
             st.write(keyword_counts)
 
-# Load and display previously stored data from session state if it exists
+            # Save keywords to session state
+            st.session_state['excel_short_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() == 1]
+            st.session_state['excel_long_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() > 1]
+
+# Load and display previously stored data from session state
 else:
+    # Check if web data is in session state
     if 'web_texts' in st.session_state:
         st.write("## Web Data from Session")
         web_texts = st.session_state['web_texts']
         web_insights = st.session_state['web_insights']
+        
         for i, text in enumerate(web_texts):
             st.write(f"### Scraped Content {i + 1}")
             st.write(text)
             st.write(f"#### Insights for Scraped Content {i + 1}")
             st.write(web_insights[i])
 
+        # Display previously stored keywords
+        if 'web_short_tail_keywords' in st.session_state and 'web_long_tail_keywords' in st.session_state:
+            st.write("### Short-Tail Keywords for Web Data")
+            st.write(st.session_state['web_short_tail_keywords'])
+            st.write("### Long-Tail Keywords for Web Data")
+            st.write(st.session_state['web_long_tail_keywords'])
+
+    # Check if Excel data is in session state
     if 'filtered_data' in st.session_state:
-        st.write("## Processed Data for Excel from Session")
+        st.write("## Excel Data from Session")
         data = st.session_state['filtered_data']
         cluster_labels = st.session_state['cluster_labels']
+        excel_insights = st.session_state['excel_insights']
         num_clusters = st.session_state['excel_clusters']
+
+        st.write("## Processed Data for Excel")
         st.write(data)
 
         for cluster_num in range(num_clusters):
             st.write(f"### Cluster {cluster_num + 1}: {cluster_labels[cluster_num]}")
             cluster_data = data[data['Cluster'] == cluster_num]['All_Problems'].tolist()
-            insights = generate_insights(' '.join(cluster_data))
-            st.write(insights)
+            st.write(excel_insights[cluster_num])
+
+        # Display previously stored keywords
+        if 'excel_short_tail_keywords' in st.session_state and 'excel_long_tail_keywords' in st.session_state:
+            st.write("### Short-Tail Keywords for Excel Data")
+            st.write(st.session_state['excel_short_tail_keywords'])
+            st.write("### Long-Tail Keywords for Excel Data")
+            st.write(st.session_state['excel_long_tail_keywords'])
+
