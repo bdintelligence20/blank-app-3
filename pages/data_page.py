@@ -224,22 +224,25 @@ if st.button("Submit"):
             cluster_label = generate_cluster_label(' '.join(cluster_data))
             cluster_labels.append(cluster_label)
 
-                # Store results in session state
+        # Store results in session state
         st.session_state['filtered_data'] = filtered_data
         st.session_state['cluster_labels'] = cluster_labels
         st.session_state['excel_texts'] = excel_texts
         st.session_state['excel_clusters'] = num_clusters
-        
+
         # Display the processed data and insights
         st.write("## Processed Data for Excel")
         st.write(filtered_data)
 
+        # Display insights for each cluster
         for cluster_num in range(num_clusters):
             st.write(f"### Cluster {cluster_num + 1}: {cluster_labels[cluster_num]}")
             cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
             insights = generate_insights(' '.join(cluster_data))
             st.write(insights)
-            
+
         # Save insights for later use in the insights dashboard
-        st.session_state['excel_insights'] = insights
+        st.session_state['excel_insights'] = [generate_insights(' '.join(filtered_data[filtered_data['Cluster'] == i]['All_Problems'].tolist())) for i in range(num_clusters)]
+
+        st.write("Data has been processed and saved. Navigate to the Insights Dashboard for visualization.")
 
