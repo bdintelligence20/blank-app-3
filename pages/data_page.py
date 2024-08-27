@@ -1,5 +1,4 @@
 import os
-import time
 import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
@@ -14,6 +13,7 @@ import nltk
 import requests
 from bs4 import BeautifulSoup
 from bs4.element import Comment
+import time
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -139,7 +139,7 @@ def extract_keywords(texts, n=10):
     keywords = vectorizer.get_feature_names_out()
     counts = X.toarray().sum(axis=0)
     keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
-    return keyword_counts
+    return keyword_counts.head(n)
 
 # Streamlit UI
 st.title("Text Analysis with GPT-4")
@@ -150,7 +150,9 @@ uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx"])
 
 # Submit button
 if st.button("Submit"):
-    all_texts = []
+    # Initialize lists to store text data for keyword extraction
+    web_texts = []
+    excel_texts = []
 
     # Check if URL is provided for scraping
     if url:
@@ -159,25 +161,12 @@ if st.button("Submit"):
             for page, text in scraped_data.items():
                 st.write(f"### Scraped Content from {page}")
                 st.write(text)
+                web_texts.append(text)
                 
                 # Use LLM to generate insights from scraped text
                 web_insights = generate_web_insights(text)
                 st.write(f"#### Insights for {page}")
                 st.write(web_insights)
-
-                # Extract keywords from scraped text
-                keyword_counts = extract_keywords([text])
-                short_tail_keywords = keyword_counts[keyword_counts['Keyword'].apply(lambda x: len(x.split()) == 1)]
-                long_tail_keywords = keyword_counts[keyword_counts['Keyword'].apply(lambda x: len(x.split()) > 1)]
-
-                st.write("### Short-Tail Keywords")
-                st.write(short_tail_keywords)
-
-                st.write("### Long-Tail Keywords")
-                st.write(long_tail_keywords)
-
-                # Append processed text to all_texts for further analysis
-                all_texts.append(text)
 
     # Check if an Excel file is uploaded
     if uploaded_file is not None:
@@ -196,9 +185,9 @@ if st.button("Submit"):
         filtered_data = data[data['Division (TD, TT, TA, Impactful)'] == selected_division]
 
         # Combine all relevant columns into one
-        filtered_data.loc[:, 'All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
-        filtered_data.loc[:, 'Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
-        all_texts.extend(filtered_data['Processed_Text'].tolist())
+        filtered_data['All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
+        filtered_data['Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
+        excel_texts = filtered_data['Processed_Text'].tolist()
 
         # Perform text vectorization using TF-IDF
         vectorizer = TfidfVectorizer(stop_words='english')
@@ -209,7 +198,7 @@ if st.button("Submit"):
         kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init='auto')
         kmeans.fit(X)
 
-        filtered_data.loc[:, 'Cluster'] = kmeans.labels_
+        filtered_data['Cluster'] = kmeans.labels_
 
         # Initialize a list to store cluster labels
         cluster_labels = []
@@ -229,21 +218,15 @@ if st.button("Submit"):
 
             # Keyword Counts in Each Cluster
             cluster_data_processed = filtered_data[filtered_data['Cluster'] == cluster_num]['Processed_Text'].tolist()
-            keyword_counts = extract_keywords(cluster_data_processed)
-
-            # Short-Tail and Long-Tail Keywords for Each Cluster
-            short_tail_keywords = keyword_counts[keyword_counts['Keyword'].apply(lambda x: len(x.split()) == 1)]
-            long_tail_keywords = keyword_counts[keyword_counts['Keyword'].apply(lambda x: len(x.split()) > 1)]
-
-            st.write("### Short-Tail Keywords for Cluster")
-            st.write(short_tail_keywords)
-
-            st.write("### Long-Tail Keywords for Cluster")
-            st.write(long_tail_keywords)
+            count_vectorizer = CountVectorizer(stop_words='english', max_features=10)
+            X_cluster = count_vectorizer.fit_transform(cluster_data_processed)
+            keywords = count_vectorizer.get_feature_names_out()
+            counts = X_cluster.toarray().sum(axis=0)
+            keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
 
             # Plotting the keyword counts
             fig, ax = plt.subplots()
-            sns.barplot(x='Count', y='Keyword', data=keyword_counts.head(10), ax=ax)
+            sns.barplot(x='Count', y='Keyword', data=keyword_counts, ax=ax)
             ax.set_xlabel('Count')
             ax.set_ylabel('Keyword')
             ax.set_title(f'Keyword Counts for Cluster {cluster_num + 1}')
@@ -285,4 +268,21 @@ if st.button("Submit"):
 
         # Display the processed data
         st.write(filtered_data)
+
+    # Combine texts from both web scraping and Excel data for keyword extraction
+    all_texts = web_texts + excel_texts
+    if all_texts:
+        # Extract short-tail and long-tail keywords
+        keyword_counts = extract_keywords(all_texts, n=20)
+        short_tail_keywords = keyword_counts[keyword_counts['Keyword'].str.split().str.len() == 1]
+        long_tail_keywords = keyword_counts[keyword_counts['Keyword'].str.split().str.len() > 1]
+
+        # Display short-tail and long-tail keywords
+        st.write("### Short-Tail Keywords")
+        st.write(short_tail_keywords)
+
+        st.write("### Long-Tail Keywords")
+        st.write(long_tail_keywords)
+    else:
+        st.write("No text data available for keyword extraction.")
 
