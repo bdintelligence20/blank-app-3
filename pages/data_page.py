@@ -1,7 +1,6 @@
 import os
 import streamlit as st
 import pandas as pd
-import sqlite3
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.cluster import KMeans
 from openai import OpenAI
@@ -21,49 +20,6 @@ nlp = spacy.load("en_core_web_sm")
 
 # Initialize NLTK's SentimentIntensityAnalyzer
 sia = SentimentIntensityAnalyzer()
-
-# Initialize the SQLite database
-def init_db():
-    conn = sqlite3.connect('data_analysis.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS web_data (id INTEGER PRIMARY KEY, url TEXT, content TEXT, insights TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS excel_data (id INTEGER PRIMARY KEY, cluster INTEGER, problems TEXT, insights TEXT)''')
-    conn.commit()
-    conn.close()
-
-# Function to save web data to SQLite
-def save_web_data(url, content, insights):
-    conn = sqlite3.connect('data_analysis.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO web_data (url, content, insights) VALUES (?, ?, ?)", (url, content, insights))
-    conn.commit()
-    conn.close()
-
-# Function to save Excel data to SQLite
-def save_excel_data(cluster, problems, insights):
-    conn = sqlite3.connect('data_analysis.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO excel_data (cluster, problems, insights) VALUES (?, ?, ?)", (cluster, problems, insights))
-    conn.commit()
-    conn.close()
-
-# Function to load web data from SQLite
-def load_web_data():
-    conn = sqlite3.connect('data_analysis.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM web_data")
-    data = c.fetchall()
-    conn.close()
-    return data
-
-# Function to load Excel data from SQLite
-def load_excel_data():
-    conn = sqlite3.connect('data_analysis.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM excel_data")
-    data = c.fetchall()
-    conn.close()
-    return data
 
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
@@ -190,9 +146,6 @@ def extract_keywords(texts, n=10):
     keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
     return keyword_counts.head(n)
 
-# Initialize the SQLite database
-init_db()
-
 # Streamlit UI
 st.title("Text Analysis with GPT-4")
 
@@ -219,8 +172,9 @@ if st.button("Submit"):
                 st.write(f"#### Insights for {page}")
                 st.write(web_insights)
 
-                # Save web scraped data and insights to SQLite
-                save_web_data(url, text, web_insights)
+            # Store web data in session state
+            st.session_state['web_texts'] = web_texts
+            st.session_state['web_insights'] = [generate_web_insights(text) for text in web_texts]
 
             # Extract keywords for web scraped data
             if web_texts:
@@ -271,8 +225,11 @@ if st.button("Submit"):
             cluster_label = generate_cluster_label(' '.join(cluster_data))
             cluster_labels.append(cluster_label)
 
-            # Save Excel data and insights to SQLite
-            save_excel_data(cluster_num, ' '.join(cluster_data), cluster_label)
+        # Store Excel data in session state
+        st.session_state['filtered_data'] = data
+        st.session_state['cluster_labels'] = cluster_labels
+        st.session_state['excel_texts'] = excel_texts
+        st.session_state['excel_clusters'] = num_clusters
 
         # Display the processed data and insights without filtering
         st.write("## Processed Data for Excel")
@@ -290,26 +247,27 @@ if st.button("Submit"):
             st.write("### Short-Tail and Long-Tail Keywords for Excel Data")
             st.write(keyword_counts)
 
-# Load and display previously stored data from SQLite
+# Load and display previously stored data from session state if it exists
 else:
-    st.write("## Web Data from Database")
-    web_data = load_web_data()
-    if web_data:
-        for row in web_data:
-            st.write(f"### Scraped Content for URL {row[1]}")
-            st.write(row[2])  # Content
-            st.write(f"#### Insights for Scraped Content")
-            st.write(row[3])  # Insights
+    if 'web_texts' in st.session_state:
+        st.write("## Web Data from Session")
+        web_texts = st.session_state['web_texts']
+        web_insights = st.session_state['web_insights']
+        for i, text in enumerate(web_texts):
+            st.write(f"### Scraped Content {i + 1}")
+            st.write(text)
+            st.write(f"#### Insights for Scraped Content {i + 1}")
+            st.write(web_insights[i])
 
-    st.write("## Excel Data from Database")
-    excel_data = load_excel_data()
-    if excel_data:
-        clusters = set(row[1] for row in excel_data)
-        for cluster_num in clusters:
-            st.write(f"### Cluster {cluster_num + 1}")
-            cluster_data = [row[2] for row in excel_data if row[1] == cluster_num]
-            insights = [row[3] for row in excel_data if row[1] == cluster_num]
-            for data, insight in zip(cluster_data, insights):
-                st.write(data)
-                st.write(insight)
+    if 'filtered_data' in st.session_state:
+        st.write("## Processed Data for Excel from Session")
+        data = st.session_state['filtered_data']
+        cluster_labels = st.session_state['cluster_labels']
+        num_clusters = st.session_state['excel_clusters']
+        st.write(data)
 
+        for cluster_num in range(num_clusters):
+            st.write(f"### Cluster {cluster_num + 1}: {cluster_labels[cluster_num]}")
+            cluster_data = data[data['Cluster'] == cluster_num]['All_Problems'].tolist()
+            insights = generate_insights(' '.join(cluster_data))
+            st.write(insights)
