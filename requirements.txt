@@ -12,4 +12,4 @@ nltk
 matplotlib
 seaborn
 requests
-beautifulsoup4
+bs4
