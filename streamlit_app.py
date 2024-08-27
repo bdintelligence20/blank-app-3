@@ -26,6 +26,19 @@ def preprocess_text(text):
     tokens = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
     return ' '.join(tokens)
 
+# Function to clean and standardize division names
+def clean_division_names(df):
+    df['Division'] = df['Division (TD, TT, TA, Impactful)'].str.strip().replace({
+        'TD': 'Talent Development',
+        'TT': 'Talent Technology',
+        'TA': 'Talent Advisory',
+        'Impactful': 'Impactful',
+        'Marketing': 'Marketing',
+        'Markting': 'Marketing',  # Correcting 'Markting' to 'Marketing'
+        'Corporate': 'Corporate'
+    })
+    return df
+
 # Access the API key from Streamlit secrets
 api_key = st.secrets["openai"]["api_key"]
 
@@ -79,18 +92,19 @@ if uploaded_file is not None:
     def load_data(file):
         data = pd.read_excel(file)
         data.fillna("", inplace=True)  # Fill NaN values with empty strings
+        data = clean_division_names(data)  # Clean and standardize division names
         return data
 
     data = load_data(uploaded_file)
 
     # Display division options and filter data
-    division_options = data['Division (TD, TT, TA, Impactful)'].unique()
+    division_options = data['Division'].unique()
     selected_division = st.selectbox("Select a Division:", division_options)
-    filtered_data = data[data['Division (TD, TT, TA, Impactful)'] == selected_division]
+    filtered_data = data[data['Division'] == selected_division]
 
     # Combine all relevant columns into one
-    filtered_data.loc[:, 'All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
-    filtered_data.loc[:, 'Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
+    filtered_data['All_Problems'] = filtered_data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
+    filtered_data['Processed_Text'] = filtered_data['All_Problems'].apply(preprocess_text)
 
     # Perform text vectorization using TF-IDF
     vectorizer = TfidfVectorizer(stop_words='english')
@@ -101,7 +115,7 @@ if uploaded_file is not None:
     kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init='auto')
     kmeans.fit(X)
 
-    filtered_data.loc[:, 'Cluster'] = kmeans.labels_
+    filtered_data['Cluster'] = kmeans.labels_
 
     # Initialize a list to store cluster labels
     cluster_labels = []
@@ -143,7 +157,7 @@ if uploaded_file is not None:
 
     # Division-Specific Problem Frequency
     st.write("### Division-Specific Problem Frequency")
-    problem_freq = filtered_data['Division (TD, TT, TA, Impactful)'].value_counts()
+    problem_freq = filtered_data['Division'].value_counts()
     fig, ax = plt.subplots()
     sns.barplot(x=problem_freq.index, y=problem_freq.values, ax=ax)
     ax.set_xlabel('Division')
