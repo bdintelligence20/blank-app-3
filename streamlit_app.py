@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import nltk
+import re
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -22,6 +23,11 @@ sia = SentimentIntensityAnalyzer()
 
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
+    # Remove emails, URLs, and personal information
+    text = re.sub(r'\S+@\S+', '', text)  # Remove email addresses
+    text = re.sub(r'http\S+', '', text)  # Remove URLs
+    text = re.sub(r'\b[A-Z][a-z]*\b', '', text)  # Remove proper nouns (assumed to be names)
+    
     doc = nlp(text.lower())
     tokens = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
     return ' '.join(tokens)
@@ -50,8 +56,8 @@ def generate_insights(text):
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "You are an expert analyst."},
-            {"role": "user", "content": f"This data comes from a questionnaire sent to business leaders. The answers describe the problems we are solving for existing customers and the issues our offerings address. Based on this data, identify the top 5 problems for each division, keeping each problem to one sentence. Cluster the responses by commonalities and provide meaningful insights without focusing on punctuation or stop words: {text}"}
+            {"role": "system", "content": "You are an expert business analyst focusing on organizational challenges and solutions."},
+            {"role": "user", "content": f"This data is derived from a questionnaire where business leaders describe challenges and solutions. Focus on identifying the key business problems and challenges without considering any contact information, names, or geographic locations. Provide the top 5 problems for each division based on the text data: {text}"}
         ],
         temperature=1,
         max_tokens=4095,
@@ -66,8 +72,8 @@ def generate_cluster_label(text):
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "You are an expert analyst in identifying themes in text data."},
-            {"role": "user", "content": f"Analyze the following responses and suggest a common theme or label for them: {text}"}
+            {"role": "system", "content": "You are an expert business analyst specializing in identifying themes in organizational challenges."},
+            {"role": "user", "content": f"Analyze the following responses and suggest a common theme or label for them. Focus on the business problems described and ignore any mention of contact information or geographical locations: {text}"}
         ],
         temperature=1,
         max_tokens=100,
@@ -82,7 +88,7 @@ def analyze_sentiment(text):
     return sia.polarity_scores(text)
 
 # Streamlit UI
-st.title("Text Analysis with GPT-4")
+st.title("Division-Specific Text Analysis with GPT-4")
 
 uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx"])
 
@@ -110,7 +116,7 @@ if uploaded_file is not None:
     vectorizer = TfidfVectorizer(stop_words='english')
     X = vectorizer.fit_transform(filtered_data['Processed_Text'])
 
-    # Perform KMeans clustering
+    # Perform KMeans clustering specific to the selected division
     num_clusters = st.slider('Select number of clusters:', 2, 10, 3)
     kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init='auto')
     kmeans.fit(X)
@@ -125,6 +131,16 @@ if uploaded_file is not None:
         cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
         cluster_label = generate_cluster_label(' '.join(cluster_data))
         cluster_labels.append(cluster_label)
+
+    # Display division summary
+    st.write(f"## Summary of {selected_division} Division's Submitted Problems")
+    division_summary = ' '.join(filtered_data['All_Problems'].tolist())
+    st.write(division_summary)
+
+    # Generate and display insights
+    st.write(f"## Insights for {selected_division} Division")
+    division_insights = generate_insights(division_summary)
+    st.write(division_insights)
 
     # Display clusters, insights, and visualizations
     for cluster_num in range(num_clusters):
