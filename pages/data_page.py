@@ -1,7 +1,6 @@
 import os
 import streamlit as st
 import pandas as pd
-import sqlite3
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.cluster import KMeans
 from openai import OpenAI
@@ -225,17 +224,31 @@ if st.button("Submit"):
         cluster_labels = []
 
         # Generate labels for each cluster
-    for cluster_num in range(num_clusters):
-        cluster_data = data[data['Cluster'] == cluster_num]['All_Problems'].tolist()
-        cluster_label = generate_cluster_label(' '.join(cluster_data))
-        cluster_labels.append(cluster_label)
+        for cluster_num in range(num_clusters):
+            cluster_data = data[data['Cluster'] == cluster_num]['All_Problems'].tolist()
+            # Check if there is any data for this cluster
+            if cluster_data:
+                cluster_label = generate_cluster_label(' '.join(cluster_data))
+                cluster_labels.append(cluster_label)
+            else:
+                # If no data is found for a cluster, append a placeholder
+                cluster_labels.append("No data available for this cluster")
+
+        # Ensure the number of cluster labels matches the number of clusters
+        if len(cluster_labels) != num_clusters:
+            st.error("Mismatch in number of clusters and cluster labels. Adjusting...")
+            cluster_labels = cluster_labels[:num_clusters]
 
         # Save Excel data and insights to session state
         st.session_state['filtered_data'] = data
         st.session_state['cluster_labels'] = cluster_labels
         st.session_state['excel_texts'] = excel_texts
         st.session_state['excel_clusters'] = num_clusters
-        st.session_state['excel_insights'] = [generate_insights(' '.join(data[data['Cluster'] == cluster_num]['All_Problems'].tolist())) for cluster_num in range(num_clusters)]
+        st.session_state['excel_insights'] = [
+            generate_insights(' '.join(data[data['Cluster'] == cluster_num]['All_Problems'].tolist())) 
+            if len(data[data['Cluster'] == cluster_num]) > 0 else "No data available"
+            for cluster_num in range(num_clusters)
+        ]
 
         # Display the processed data and insights without filtering
         st.write("## Processed Data for Excel")
@@ -244,8 +257,11 @@ if st.button("Submit"):
         for cluster_num in range(num_clusters):
             st.write(f"### Cluster {cluster_num + 1}: {cluster_labels[cluster_num]}")
             cluster_data = data[data['Cluster'] == cluster_num]['All_Problems'].tolist()
-            insights = generate_insights(' '.join(cluster_data))
-            st.write(insights)
+            if cluster_data:
+                insights = generate_insights(' '.join(cluster_data))
+                st.write(insights)
+            else:
+                st.write("No data available for this cluster.")
 
         # Extract keywords for Excel data
         if excel_texts:
@@ -300,4 +316,3 @@ else:
             st.write(st.session_state['excel_short_tail_keywords'])
             st.write("### Long-Tail Keywords for Excel Data")
             st.write(st.session_state['excel_long_tail_keywords'])
-
