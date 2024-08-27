@@ -225,10 +225,10 @@ if st.button("Submit"):
         cluster_labels = []
 
         # Generate labels for each cluster
-        for cluster_num in range(num_clusters):
-            cluster_data = data[data['Cluster'] == cluster_num]['All_Problems'].tolist()
-            cluster_label = generate_cluster_label(' '.join(cluster_data))
-            cluster_labels.append(cluster_label)
+    for cluster_num in range(num_clusters):
+        cluster_data = data[data['Cluster'] == cluster_num]['All_Problems'].tolist()
+        cluster_label = generate_cluster_label(' '.join(cluster_data))
+        cluster_labels.append(cluster_label)
 
         # Save Excel data and insights to session state
         st.session_state['filtered_data'] = data

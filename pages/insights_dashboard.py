@@ -3,6 +3,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+# Debug function to print session state keys
+def print_session_state():
+    st.write("### Session State Keys")
+    st.write(list(st.session_state.keys()))
+
 # Function to display top 5 problems per division based on problem-solving questionnaire
 def display_top_problems_per_division():
     st.subheader("Top 5 Problems Per Division Based on Problem Solving Questionnaire")
@@ -14,6 +19,8 @@ def display_top_problems_per_division():
             for problem in problems:
                 st.write(f"- {problem}")
             st.write("")
+        else:
+            st.write(f"No data available for {division}")
 
 # Function to display consolidated clusters for all divisions
 def display_consolidated_clusters():
@@ -24,13 +31,13 @@ def display_consolidated_clusters():
             st.write(f"**Cluster {idx + 1}**")
             st.write(cluster)
             st.write("")
+    else:
+        st.write("No consolidated clusters data available.")
 
 # Function to display consolidated data visualizations
 def display_data_visualizations(data, title):
     st.subheader(f"Consolidated Data Visualizations ({title})")
-    
-    # Keyword frequency visualization
-    if not data.empty:
+    if data is not None and not data.empty:
         st.write("**Keyword Frequency**")
         fig, ax = plt.subplots()
         sns.barplot(x='Count', y='Keyword', data=data, ax=ax)
@@ -44,18 +51,21 @@ def display_data_visualizations(data, title):
 def display_keywords(short_tail, long_tail, title):
     st.subheader(f"{title} Keywords")
     st.write("**Short-Tail Keywords**")
-    if not short_tail.empty:
+    if short_tail is not None and not short_tail.empty:
         st.write(short_tail)
     else:
         st.write("No short-tail keywords available.")
     
     st.write("**Long-Tail Keywords**")
-    if not long_tail.empty:
+    if long_tail is not None and not long_tail.empty:
         st.write(long_tail)
     else:
         st.write("No long-tail keywords available.")
 
 st.title("Insights Dashboard")
+
+# Print session state for debugging
+print_session_state()
 
 # Check if Excel data insights are available in session state
 if 'excel_insights' in st.session_state:
