@@ -201,24 +201,3 @@ if uploaded_file is not None:
 
     # Display the processed data
     st.write(filtered_data)
-import streamlit as st
-
-# Set page configuration
-st.set_page_config(page_title="Multi-Page Streamlit App", layout="wide")
-
-# Main navigation
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Data Page", "Insights Dashboard"])
-
-if page == "Data Page":
-    st.title("Data Page")
-    st.write("This page allows you to analyze data.")
-    st.write("Use the 'Data Page' link in the sidebar to return here.")
-    # Include the content from your current data page script here
-    # Use `exec(open("pages/data_page.py").read())` if you want to run the script directly
-
-elif page == "Insights Dashboard":
-    st.title("Insights Dashboard")
-    st.write("This page will display insights and visualizations.")
-    st.write("Use the 'Insights Dashboard' link in the sidebar to navigate here.")
-    # This is where you would load the contents of `insights_dashboard.py`
