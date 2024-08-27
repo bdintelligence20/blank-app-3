@@ -221,7 +221,6 @@ if st.button("Submit"):
         data = load_data(uploaded_file)
 
         # Clean division names
-                # Clean division names
         data = clean_division_names(data)
 
         # Process Excel data without filtering
@@ -306,6 +305,13 @@ if st.button("Submit"):
         additional_keywords = generate_comprehensive_keywords(problem_summaries)
         all_keywords.extend(additional_keywords)
 
+        # Remove duplicates and clean the keyword list
+        all_keywords = list(set(all_keywords))
+
+        # Display the comprehensive list of keywords and key phrases
+        st.write("### Comprehensive List of Keywords and Key Phrases")
+        st.write(all_keywords)
+
         # Fetch search volumes for the keywords and key phrases using Google Keyword Planner API
         keyword_search_volumes = fetch_keyword_search_volume(all_keywords)
         st.write("### Keyword and Key Phrase Search Volumes")
@@ -354,3 +360,13 @@ else:
             st.write(st.session_state['excel_short_tail_keywords'])
             st.write("### Long-Tail Keywords for Excel Data")
             st.write(st.session_state['excel_long_tail_keywords'])
+
+        # Display comprehensive list of keywords and key phrases
+        if 'excel_short_tail_keywords' in st.session_state and 'excel_long_tail_keywords' in st.session_state:
+            all_keywords = st.session_state['excel_short_tail_keywords']['Keyword'].tolist() + \
+                           st.session_state['excel_long_tail_keywords']['Keyword'].tolist()
+
+            # Fetch search volumes for the keywords and key phrases using Google Keyword Planner API
+            keyword_search_volumes = fetch_keyword_search_volume(all_keywords)
+            st.write("### Keyword and Key Phrase Search Volumes")
+            st.write(keyword_search_volumes)
