@@ -222,7 +222,7 @@ if 'filtered_data' not in st.session_state or 'excel_texts' not in st.session_st
 
             # Generate labels for each cluster
             for cluster_num in range(num_clusters):
-                cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_                Problems'].tolist()
+                cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
                 cluster_label = generate_cluster_label(' '.join(cluster_data))
                 cluster_labels.append(cluster_label)
 
@@ -241,7 +241,7 @@ if 'filtered_data' not in st.session_state or 'excel_texts' not in st.session_st
                 cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
                 insights = generate_insights(' '.join(cluster_data))
                 st.write(insights)
-                
+
             # Save insights for later use in the insights dashboard
             st.session_state['excel_insights'] = insights
 
@@ -260,4 +260,3 @@ else:
         cluster_data = filtered_data[filtered_data['Cluster'] == cluster_num]['All_Problems'].tolist()
         insights = generate_insights(' '.join(cluster_data))
         st.write(insights)
-
