@@ -21,6 +21,12 @@ nlp = spacy.load("en_core_web_sm")
 # Initialize NLTK's SentimentIntensityAnalyzer
 sia = SentimentIntensityAnalyzer()
 
+# Access the API key from Streamlit secrets
+api_key = st.secrets["openai"]["api_key"]
+
+# Initialize OpenAI client
+client = OpenAI(api_key=api_key)
+
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
     doc = nlp(text.lower())
@@ -38,12 +44,6 @@ def clean_division_names(df):
         'Corporate': 'Corporate'
     })
     return df
-
-# Access the API key from Streamlit secrets
-api_key = st.secrets["openai"]["api_key"]
-
-# Initialize OpenAI client
-client = OpenAI(api_key=api_key)
 
 # Function to generate insights using GPT-4 for general data
 def generate_insights(text):
@@ -92,6 +92,29 @@ def generate_cluster_label(text):
         presence_penalty=0
     )
     return response.choices[0].message.content.strip()
+
+# Function to generate a comprehensive list of keywords and key phrases
+def generate_comprehensive_keywords(text):
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are an expert in keyword analysis and SEO."},
+            {"role": "user", "content": f"Based on the following text, generate a comprehensive list of relevant keywords and key phrases, including both short-tail and long-tail terms: {text}"}
+        ],
+        temperature=1,
+        max_tokens=4095,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0
+    )
+    return response.choices[0].message.content.strip().split('\n')
+
+# Function to fetch keyword search volumes using Google Keyword Planner API
+def fetch_keyword_search_volume(keywords):
+    # Placeholder function: Replace with actual implementation to use Google Keyword Planner API
+    # This function should return a dictionary with keywords and their corresponding search volumes
+    search_volumes = {keyword: 'Volume Placeholder' for keyword in keywords}
+    return search_volumes
 
 # Function to check if a tag is visible
 def tag_visible(element):
@@ -198,6 +221,7 @@ if st.button("Submit"):
         data = load_data(uploaded_file)
 
         # Clean division names
+                # Clean division names
         data = clean_division_names(data)
 
         # Process Excel data without filtering
@@ -272,6 +296,20 @@ if st.button("Submit"):
             # Save keywords to session state
             st.session_state['excel_short_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() == 1]
             st.session_state['excel_long_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() > 1]
+
+        # Generate comprehensive list of keywords and key phrases
+        all_keywords = st.session_state['excel_short_tail_keywords']['Keyword'].tolist() + \
+                       st.session_state['excel_long_tail_keywords']['Keyword'].tolist()
+
+        # Add any additional key phrases related to problem summaries
+        problem_summaries = ' '.join(data['All_Problems'].tolist())
+        additional_keywords = generate_comprehensive_keywords(problem_summaries)
+        all_keywords.extend(additional_keywords)
+
+        # Fetch search volumes for the keywords and key phrases using Google Keyword Planner API
+        keyword_search_volumes = fetch_keyword_search_volume(all_keywords)
+        st.write("### Keyword and Key Phrase Search Volumes")
+        st.write(keyword_search_volumes)
 
 # Load and display previously stored data from session state
 else:
