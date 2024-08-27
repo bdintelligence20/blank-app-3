@@ -11,3 +11,5 @@ python-dotenv
 nltk
 matplotlib
 seaborn
+requests
+beautifulsoup4
