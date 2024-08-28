@@ -1,8 +1,7 @@
 import os
 import streamlit as st
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.cluster import KMeans
+from sklearn.feature_extraction.text import CountVectorizer
 from openai import OpenAI
 import spacy
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
@@ -50,70 +49,6 @@ def clean_division_names(df):
     })
     return df
 
-# Function to generate insights using GPT-4 for general data
-def generate_insights(text):
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are an expert analyst."},
-            {"role": "user", "content": f"This data comes from a questionnaire sent to business leaders. The answers describe the problems we are solving for existing customers and the issues our offerings address. Based on this data, identify the top 5 problems for each division, keeping each problem to one sentence. Cluster the responses by commonalities and provide meaningful insights without focusing on punctuation or stop words: {text}"}
-        ],
-        temperature=1,
-        max_tokens=4095,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0
-    )
-    return response.choices[0].message.content.strip()
-
-# Function to generate insights using GPT-4 specifically for web scraping
-def generate_web_insights(text):
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are an expert in analyzing website content."},
-            {"role": "user", "content": f"Based on the scraped content, identify key themes and insights. Provide a summary of the main points: {text}"}
-        ],
-        temperature=1,
-        max_tokens=4095,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0
-    )
-    return response.choices[0].message.content.strip()
-
-# Function to generate cluster labels using GPT-4
-def generate_cluster_label(text):
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are an expert analyst in identifying themes in text data."},
-            {"role": "user", "content": f"Analyze the following responses and suggest a common theme or label for them: {text}"}
-        ],
-        temperature=1,
-        max_tokens=100,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0
-    )
-    return response.choices[0].message.content.strip()
-
-# Function to generate a comprehensive list of keywords and key phrases
-def generate_comprehensive_keywords(text):
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are an expert in keyword analysis and SEO."},
-            {"role": "user", "content": f"Based on the following text, generate a comprehensive list of relevant keywords and key phrases, including both short-tail and long-tail terms: {text}"}
-        ],
-        temperature=1,
-        max_tokens=4095,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0
-    )
-    return response.choices[0].message.content.strip().split('\n')
-
 # Function to check if a tag is visible
 def tag_visible(element):
     if element.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]']:
@@ -134,29 +69,6 @@ def scrape_page(url):
     except requests.exceptions.RequestException as e:
         st.error(f"Error fetching the URL: {e}")
         return ""
-
-# Function to scrape the main URL and all links in the navigation header
-def scrape_website(url):
-    main_content = scrape_page(url)
-    scraped_data = {"Main": main_content}
-
-    try:
-        response = requests.get(url, verify=False)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        nav_links = soup.find_all('a', href=True)
-
-        # Extract unique links from the navigation
-        links = {link['href'] for link in nav_links if link['href'].startswith('/')}
-
-        for link in links:
-            full_url = f"{url.rstrip('/')}/{link.lstrip('/')}"
-            scraped_data[full_url] = scrape_page(full_url)
-            time.sleep(2)  # Adding delay to prevent rate limiting or being blocked
-
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error fetching the URL: {e}")
-    
-    return scraped_data
 
 # Function to extract text from DOCX files
 def extract_text_from_docx(docx_file):
@@ -240,12 +152,13 @@ if st.button("Submit"):
 
     # Store all collected texts in session state
     st.session_state['all_texts'] = all_texts
+    st.success("Data has been scraped and processed successfully. You can now query the data.")
 
 # Chatbot interface
-if 'all_texts' in st.session_state:
+if 'all_texts' in st.session_state and st.session_state['all_texts']:
     st.write("### Chat with the Data")
     user_query = st.text_input("Ask a question about the data or request a graph:")
-    
+
     if st.button("Submit Query"):
         if user_query.lower().startswith("graph"):
             # Generate a graph based on keywords or data patterns
@@ -257,20 +170,32 @@ if 'all_texts' in st.session_state:
             plt.xticks(rotation=45)
             st.pyplot(fig)
         else:
-            # Query the data using GPT-4
-            combined_text = ' '.join(st.session_state['all_texts'])
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are an intelligent assistant that helps analyze data and answer questions."},
-                    {"role": "user", "content": f"Based on the following data: {combined_text}. {user_query}"}
-                ],
-                temperature=0.5,
-                max_tokens=1500,
-                top_p=1,
-                frequency_penalty=0,
-                presence_penalty=0
-            )
-            st.write(response.choices[0].message.content.strip())
+            # Dynamically query chunks of data to avoid exceeding token limits
+            responses = []
+            for text_chunk in st.session_state['all_texts']:
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "You are an intelligent assistant that helps analyze data and answer questions."},
+                        {"role": "user", "content": f"Based on the following data: {text_chunk}. {user_query}"}
+                    ],
+                    temperature=0.5,
+                    max_tokens=1500,
+                    top_p=1,
+                    frequency_penalty=0,
+                    presence_penalty=0
+                )
+                responses.append(response.choices[0].message.content.strip())
+            
+            # Combine all responses
+            combined_responses = "\n".join(responses)
+            st.write(combined_responses)
+else:
+    st.info("Please submit data to scrape and process before querying.")
 
-
+# Web Search Functionality
+st.write("### Web Search")
+search_query = st.text_input("Enter a search query for additional information:")
+if st.button("Search Web"):
+    # Implement a web search using an external API or tool (not implemented here)
+    st.write("Web search feature is not implemented in this script.")
