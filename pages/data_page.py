@@ -273,10 +273,4 @@ if 'all_texts' in st.session_state:
             )
             st.write(response.choices[0].message.content.strip())
 
-# Web Search Functionality
-st.write("### Web Search")
-search_query = st.text_input("Enter a search query for additional information:")
-if st.button("Search Web"):
-    # Implement a web search using an external API or tool (not implemented here)
-    st.write("Web search feature is not implemented in this script.")
 
