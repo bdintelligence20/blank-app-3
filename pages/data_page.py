@@ -13,6 +13,8 @@ from bs4.element import Comment
 import time
 import PyPDF2
 import docx
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -212,8 +214,8 @@ def extract_keywords(texts, n=10):
     keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
     return keyword_counts.head(n)
 
-# Streamlit UI
-st.title("Text Analysis with GPT-4")
+# Store data and allow querying through a chatbot interface
+st.title("Interactive Chatbot for Data Analysis")
 
 # Multi-line text input for URLs
 urls_input = st.text_area("Enter URLs to scrape data (one per line):")
@@ -229,64 +231,52 @@ if st.button("Submit"):
     # Extract text from URLs
     if urls:
         url_texts = extract_text_from_urls(urls)
-        st.write("Scraped Content from URLs")
-        for i, text in enumerate(url_texts):
-            st.write(f"### URL {i + 1}")
-            st.write(text)
-            all_texts.extend(url_texts)
+        all_texts.extend(url_texts)
 
     # Process uploaded files
     if uploaded_files:
         file_texts = process_uploaded_files(uploaded_files)
-        st.write("## Content Extracted from Uploaded Files")
-        for i, text in enumerate(file_texts):
-            st.write(f"### File {i + 1}")
-            st.write(text)
-            all_texts.extend(file_texts)
+        all_texts.extend(file_texts)
 
-    # Ensure we have text data to analyze
-    if all_texts:
-        # Extract keywords from all collected texts
-        keyword_counts = extract_keywords(all_texts, n=20)
-        st.write("### Short-Tail and Long-Tail Keywords for All Data")
-        st.write(keyword_counts)
+    # Store all collected texts in session state
+    st.session_state['all_texts'] = all_texts
 
-        # Save keywords to session state
-        st.session_state['all_short_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() == 1]
-        st.session_state['all_long_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() > 1]
-
-        # Generate comprehensive list of keywords and key phrases
-        all_keywords = st.session_state['all_short_tail_keywords']['Keyword'].tolist() + \
-                       st.session_state['all_long_tail_keywords']['Keyword'].tolist()
-
-        # Add any additional key phrases related to all text summaries
-        combined_text = ' '.join(all_texts)
-        additional_keywords = generate_comprehensive_keywords(combined_text)
-        all_keywords.extend(additional_keywords)
-
-        # Remove duplicates and clean the keyword list
-        all_keywords = list(set(all_keywords))
-
-        # Display the comprehensive list of keywords and key phrases
-        st.write("### Comprehensive List of Keywords and Key Phrases")
-        st.write(all_keywords)
-
-        # Analyze and display insights using GPT-4
-        st.write("### Insights from All Data")
-        insights = generate_insights(combined_text)
-        st.write(insights)
-
-# Load and display previously stored data from session state
-else:
-    # Check if text data is in session state
-    if 'all_short_tail_keywords' in st.session_state:
-        st.write("### Short-Tail Keywords for All Data")
-        st.write(st.session_state['all_short_tail_keywords'])
-        
-    if 'all_long_tail_keywords' in st.session_state:
-        st.write("### Long-Tail Keywords for All Data")
-        st.write(st.session_state['all_long_tail_keywords'])
+# Chatbot interface
+if 'all_texts' in st.session_state:
+    st.write("### Chat with the Data")
+    user_query = st.text_input("Ask a question about the data or request a graph:")
     
-    if 'excel_insights' in st.session_state:
-        st.write("### Insights from All Data")
-        st.write(st.session_state['excel_insights'])
+    if st.button("Submit Query"):
+        if user_query.lower().startswith("graph"):
+            # Generate a graph based on keywords or data patterns
+            st.write("Generating graph based on the data...")
+            # Example: generate a simple frequency graph
+            keywords = extract_keywords(st.session_state['all_texts'], n=10)
+            fig, ax = plt.subplots()
+            sns.barplot(x='Keyword', y='Count', data=keywords, ax=ax)
+            plt.xticks(rotation=45)
+            st.pyplot(fig)
+        else:
+            # Query the data using GPT-4
+            combined_text = ' '.join(st.session_state['all_texts'])
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are an intelligent assistant that helps analyze data and answer questions."},
+                    {"role": "user", "content": f"Based on the following data: {combined_text}. {user_query}"}
+                ],
+                temperature=0.5,
+                max_tokens=1500,
+                top_p=1,
+                frequency_penalty=0,
+                presence_penalty=0
+            )
+            st.write(response.choices[0].message.content.strip())
+
+# Web Search Functionality
+st.write("### Web Search")
+search_query = st.text_input("Enter a search query for additional information:")
+if st.button("Search Web"):
+    # Implement a web search using an external API or tool (not implemented here)
+    st.write("Web search feature is not implemented in this script.")
+
