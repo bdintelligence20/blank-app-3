@@ -135,23 +135,29 @@ from google.ads.googleads.client import GoogleAdsClient
 def fetch_keyword_search_volume(client, customer_id, keywords):
     try:
         keyword_plan_idea_service = client.get_service("KeywordPlanIdeaService")
-        
+
         # Create a request
         request = client.get_type("GenerateKeywordIdeasRequest")
         request.customer_id = customer_id
-        request.language = ResourceName.language_constant(1000)  # English language ID
-        request.geo_target_constants.append(ResourceName.geo_target_constant(2840))  # US location ID
         
+        # Set language constant (English)
+        language_constant_id = client.get_service("GoogleAdsService").language_constant_path(1000)  # English language ID
+        request.language = language_constant_id
+
+        # Set geo target constant (US)
+        geo_target_constant_id = client.get_service("GoogleAdsService").geo_target_constant_path(2840)  # US location ID
+        request.geo_target_constants.append(geo_target_constant_id)
+
         # Set the keyword seed
         request.keyword_seed.keywords.extend(keywords)
-        
-        # Execute the request
+
+        # Send the request and process the response
         response = keyword_plan_idea_service.generate_keyword_ideas(request=request)
-        
+
         search_volumes = {}
         for idea in response.results:
             search_volumes[idea.text] = idea.keyword_idea_metrics.avg_monthly_searches
-        
+
         return search_volumes
 
     except GoogleAdsException as ex:
@@ -159,6 +165,7 @@ def fetch_keyword_search_volume(client, customer_id, keywords):
         for error in ex.failure.errors:
             st.error(f"\tError with message '{error.message}'.")
         return {}
+
 
 
 # Function to check if a tag is visible
