@@ -25,7 +25,6 @@ sia = SentimentIntensityAnalyzer()
 
 # Access API keys from Streamlit secrets
 api_key = st.secrets["openai"]["api_key"]
-developer_token = st.secrets["google_api"]["developer_token"]
 client_id = st.secrets["google_api"]["client_id"]
 client_secret = st.secrets["google_api"]["client_secret"]
 refresh_token = st.secrets["google_api"]["refresh_token"]
