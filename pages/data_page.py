@@ -33,7 +33,7 @@ api_key = st.secrets["openai"]["api_key"]
 client = OpenAI(api_key=api_key)
 
 # Connect to Milvus
-connections.connect("default", host="localhost", port="19530")
+connections.connect("default", host="20.127.208.46", port="19530")
 
 # Define Milvus collection schema
 fields = [
