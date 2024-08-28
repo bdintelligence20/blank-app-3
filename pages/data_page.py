@@ -228,8 +228,8 @@ if st.button("Submit"):
 
     # Extract text from URLs
     if urls:
-        url_texts = extract_text_from_urls(url)
-        st.write("## Scraped Content from URLs")
+        url_texts = extract_text_from_urls(urls)
+        st.write("Scraped Content from URLs")
         for i, text in enumerate(url_texts):
             st.write(f"### URL {i + 1}")
             st.write(text)
