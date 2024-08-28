@@ -25,6 +25,7 @@ sia = SentimentIntensityAnalyzer()
 
 # Access API keys from Streamlit secrets
 api_key = st.secrets["openai"]["api_key"]
+developer_token = st.secrets["google_api"]["developer_token"]
 client_id = st.secrets["google_api"]["client_id"]
 client_secret = st.secrets["google_api"]["client_secret"]
 refresh_token = st.secrets["google_api"]["refresh_token"]
@@ -35,10 +36,11 @@ client = OpenAI(api_key=api_key)
 # Function to initialize Google Ads client
 def initialize_google_ads_client():
     google_ads_client = GoogleAdsClient.load_from_dict({
+        "developer_token": st.secrets["google_api"]["developer_token"],
         "client_id": st.secrets["google_api"]["client_id"],
         "client_secret": st.secrets["google_api"]["client_secret"],
         "refresh_token": st.secrets["google_api"]["refresh_token"],
-        "login_customer_id": 6754643235,  # Add your manager account ID if you are using one
+        "login_customer_id": 5109321064,  # Add your manager account ID if you are using one
         "use_proto_plus": True
     })
     return google_ads_client
