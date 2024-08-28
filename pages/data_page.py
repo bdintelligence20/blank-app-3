@@ -36,7 +36,6 @@ client = OpenAI(api_key=api_key)
 # Function to initialize Google Ads client
 def initialize_google_ads_client():
     google_ads_client = GoogleAdsClient.load_from_dict({
-        "developer_token": st.secrets["google_api"]["developer_token"],
         "client_id": st.secrets["google_api"]["client_id"],
         "client_secret": st.secrets["google_api"]["client_secret"],
         "refresh_token": st.secrets["google_api"]["refresh_token"],
