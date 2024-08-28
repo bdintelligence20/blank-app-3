@@ -174,13 +174,13 @@ if 'all_texts' in st.session_state and st.session_state['all_texts']:
             responses = []
             for text_chunk in st.session_state['all_texts']:
                 response = client.chat.completions.create(
-                    model="gpt-4o",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": "You are an intelligent assistant that helps analyze data and answer questions."},
                         {"role": "user", "content": f"Based on the following data: {text_chunk}. {user_query}"}
                     ],
                     temperature=0.5,
-                    max_tokens=1500,
+                    max_tokens=16383,
                     top_p=1,
                     frequency_penalty=0,
                     presence_penalty=0
