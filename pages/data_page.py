@@ -13,6 +13,9 @@ from bs4.element import Comment
 import time
 from pytrends.request import TrendReq  # Import Pytrends
 
+# Initialize Pytrends
+pytrends = TrendReq(hl='en-US', tz=360)
+
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
 
@@ -163,10 +166,7 @@ def extract_keywords(texts, n=10):
     keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
     return keyword_counts.head(n)
 
-# Initialize Pytrends
-pytrends = TrendReq(hl='en-US', tz=360)
-
-# Function to get Google Trends data
+# Function to fetch Google Trends data for a list of keywords
 def get_trends_data(keywords):
     trends_data = {}
     for keyword in keywords:
@@ -175,6 +175,8 @@ def get_trends_data(keywords):
             data = pytrends.interest_over_time()
             if not data.empty:
                 trends_data[keyword] = data
+            # Add a delay to prevent hitting the rate limit
+            time.sleep(5)  # Adjust the sleep time as needed
         except Exception as e:
             st.error(f"Error fetching trends data for keyword '{keyword}': {e}")
     return trends_data
@@ -322,9 +324,70 @@ if st.button("Submit"):
         st.write("### Comprehensive List of Keywords and Key Phrases")
         st.write(all_keywords)
 
-        # Fetch Google Trends data for the keywords
+        # Fetch Google Trends data for the keywords and key phrases
         st.write("### Google Trends Data for Keywords")
         trends_data = get_trends_data(all_keywords)
         for keyword, trend in trends_data.items():
             st.write(f"#### Trend data for {keyword}")
-            st.line_chart(trend[['interest_over_time']])
+            if 'isPartial' in trend.columns:
+                trend = trend.drop(columns=['isPartial'])  # Drop the 'isPartial' column if it exists
+            st.line_chart(trend)
+
+# Load and display previously stored data from session state
+else:
+    # Check if web data is in session state
+    if 'web_texts' in st.session_state:
+        st.write("## Web Data from Session")
+        web_texts = st.session_state['web_texts']
+        web_insights = st.session_state['web_insights']
+        
+        for i, text in enumerate(web_texts):
+            st.write(f"### Scraped Content {i + 1}")
+            st.write(text)
+            st.write(f"#### Insights for Scraped Content {i + 1}")
+            st.write(web_insights[i])
+
+        # Display previously stored keywords
+        if 'web_short_tail_keywords' in st.session_state and 'web_long_tail_keywords' in st.session_state:
+            st.write("### Short-Tail Keywords for Web Data")
+            st.write(st.session_state['web_short_tail_keywords'])
+            st.write("### Long-Tail Keywords for Web Data")
+            st.write(st.session_state['web_long_tail_keywords'])
+
+    # Check if Excel data is in session state
+    if 'filtered_data' in st.session_state:
+        st.write("## Excel Data from Session")
+        data = st.session_state['filtered_data']
+        cluster_labels = st.session_state['cluster_labels']
+        excel_insights = st.session_state['excel_insights']
+        num_clusters = st.session_state['excel_clusters']
+
+        st.write("## Processed Data for Excel")
+        st.write(data)
+
+        for cluster_num in range(num_clusters):
+            st.write(f"### Cluster {cluster_num + 1}: {cluster_labels[cluster_num]}")
+            cluster_data = data[data['Cluster'] == cluster_num]['All_Problems'].tolist()
+            st.write(excel_insights[cluster_num])
+
+        # Display previously stored keywords
+        if 'excel_short_tail_keywords' in st.session_state and 'excel_long_tail_keywords' in st.session_state:
+            st.write("### Short-Tail Keywords for Excel Data")
+            st.write(st.session_state['excel_short_tail_keywords'])
+            st.write("### Long-Tail Keywords for Excel Data")
+            st.write(st.session_state['excel_long_tail_keywords'])
+
+        # Display comprehensive list of keywords and key phrases
+        if 'excel_short_tail_keywords' in st.session_state and 'excel_long_tail_keywords' in st.session_state:
+            all_keywords = st.session_state['excel_short_tail_keywords']['Keyword'].tolist() + \
+                           st.session_state['excel_long_tail_keywords']['Keyword'].tolist()
+
+            # Fetch Google Trends data for the keywords and key phrases
+            st.write("### Google Trends Data for Keywords")
+            trends_data = get_trends_data(all_keywords)
+            for keyword, trend in trends_data.items():
+                st.write(f"#### Trend data for {keyword}")
+                if 'isPartial' in trend.columns:
+                    trend = trend.drop(columns=['isPartial'])  # Drop the 'isPartial' column if it exists
+                st.line_chart(trend)
+
