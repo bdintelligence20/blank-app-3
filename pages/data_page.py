@@ -13,6 +13,7 @@ from bs4.element import Comment
 import time
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
+from google.ads.googleads.util import ResourceName
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -130,24 +131,28 @@ def generate_comprehensive_keywords(text):
     return response.choices[0].message.content.strip().split('\n')
 
 # Function to fetch keyword search volumes using Google Keyword Planner API
+from google.ads.googleads.util import ResourceName
+
 def fetch_keyword_search_volume(client, customer_id, keywords):
     try:
         keyword_plan_idea_service = client.get_service("KeywordPlanIdeaService")
-
+        
+        # Create a request
         request = client.get_type("GenerateKeywordIdeasRequest")
         request.customer_id = customer_id
-        request.language = client.get_service("GoogleAdsService").language_constants["1000"]  # English language ID
-        request.geo_target_constants.extend(
-            [client.get_service("GoogleAdsService").geo_target_constants["2840"]]  # US location ID
-        )
+        request.language = ResourceName.language_constant(1000)  # English language ID
+        request.geo_target_constants.append(ResourceName.geo_target_constant(2840))  # US location ID
+        
+        # Set the keyword seed
         request.keyword_seed.keywords.extend(keywords)
-
+        
+        # Execute the request
         response = keyword_plan_idea_service.generate_keyword_ideas(request=request)
-
+        
         search_volumes = {}
         for idea in response.results:
             search_volumes[idea.text] = idea.keyword_idea_metrics.avg_monthly_searches
-
+        
         return search_volumes
 
     except GoogleAdsException as ex:
@@ -155,6 +160,7 @@ def fetch_keyword_search_volume(client, customer_id, keywords):
         for error in ex.failure.errors:
             st.error(f"\tError with message '{error.message}'.")
         return {}
+
 
 # Function to check if a tag is visible
 def tag_visible(element):
