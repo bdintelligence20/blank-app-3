@@ -189,18 +189,21 @@ def extract_text_from_pdf(pdf_file):
 # Function to process uploaded files of various formats
 def process_uploaded_files(files):
     text_data = []
+    data_frames = {}
     for file in files:
         if file.type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or file.type == 'application/vnd.ms-excel':
             df = pd.read_excel(file)
             text_data.extend(df.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
+            data_frames[file.name] = df
         elif file.type == 'text/csv':
             df = pd.read_csv(file)
             text_data.extend(df.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
+            data_frames[file.name] = df
         elif file.type == 'application/pdf':
             text_data.append(extract_text_from_pdf(file))
         elif file.type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
             text_data.append(extract_text_from_docx(file))
-    return text_data
+    return text_data, data_frames
 
 # Function to extract text from multiple URLs
 def extract_text_from_urls(urls):
@@ -226,6 +229,14 @@ def extract_keywords(texts, n=10):
     keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
     return keyword_counts.head(n)
 
+# Function to query dataframes for specific information
+def query_data(df, query):
+    try:
+        result = df.query(query)
+        return result.to_string()
+    except Exception as e:
+        return f"Error querying data: {str(e)}"
+
 # Store data and allow querying through a chatbot interface
 st.title("Interactive Chatbot for Data Analysis")
 
@@ -239,6 +250,7 @@ uploaded_files = st.file_uploader("Upload multiple files", type=["xlsx", "csv", 
 # Button to start processing
 if st.button("Submit"):
     all_texts = []
+    data_frames = {}
 
     # Extract text from URLs
     if urls:
@@ -247,11 +259,13 @@ if st.button("Submit"):
 
     # Process uploaded files
     if uploaded_files:
-        file_texts = process_uploaded_files(uploaded_files)
+        file_texts, file_data_frames = process_uploaded_files(uploaded_files)
         all_texts.extend(file_texts)
+        data_frames.update(file_data_frames)
 
-    # Store all collected texts in session state
+    # Store all collected texts and data frames in session state
     st.session_state['all_texts'] = all_texts
+    st.session_state['data_frames'] = data_frames
 
     # Notify user that data has been scraped and stored
     st.success("Data has been successfully scraped and stored. You can now query the data.")
@@ -265,33 +279,45 @@ if 'all_texts' in st.session_state:
         if user_query.lower().startswith("graph"):
             # Generate a graph based on keywords or data patterns
             st.write("Generating graph based on the data...")
-            # Example: generate a simple frequency graph
             keywords = extract_keywords(st.session_state['all_texts'], n=10)
             fig, ax = plt.subplots()
             sns.barplot(x='Keyword', y='Count', data=keywords, ax=ax)
             plt.xticks(rotation=45)
             st.pyplot(fig)
+        elif user_query.lower().startswith("query"):
+            # Extract the specific query from the user's input
+            query_parts = user_query.split(':')
+            if len(query_parts) > 1:
+                query = query_parts[1].strip()
+                # Check for specific data frame query
+                for file_name, df in st.session_state['data_frames'].items():
+                    if query.lower() in df.columns.str.lower().tolist():
+                        result = query_data(df, query)
+                        st.write(result)
+                        break
+                else:
+                    st.write("No matching column found in uploaded files.")
+            else:
+                st.write("Please provide a specific query after 'query:'")
         else:
             # Query the data using GPT-4
             combined_text = ' '.join(st.session_state['all_texts'])
-            # Chunk the combined text for querying
             text_chunks = list(chunk_text(combined_text))
             responses = []
             for chunk in text_chunks:
                 response = client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
-                        {"role": "system", "content": "You are an intelligent assistant that helps analyze data and answer questions."},
+                        {"role": "system", "content": "You are an intelligent assistant that provides concise and accurate answers to the user's questions based on the data provided."},
                         {"role": "user", "content": f"Based on the following data: {chunk}. {user_query}"}
                     ],
-                    temperature=0.5,
-                    max_tokens=1500,
+                    temperature=0.3,  # Lower temperature for more concise responses
+                    max_tokens=500,
                     top_p=1,
                     frequency_penalty=0,
                     presence_penalty=0
                 )
                 responses.append(response.choices[0].message.content.strip())
-            # Combine all responses
             full_response = " ".join(responses)
             st.write(full_response)
 
@@ -299,6 +325,4 @@ if 'all_texts' in st.session_state:
 st.write("### Web Search")
 search_query = st.text_input("Enter a search query for additional information:")
 if st.button("Search Web"):
-    # Implement a web search using an external API or tool (not implemented here)
     st.write("Web search feature is not implemented in this script.")
-
