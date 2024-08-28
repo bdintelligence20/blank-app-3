@@ -130,7 +130,7 @@ def generate_comprehensive_keywords(text):
     return response.choices[0].message.content.strip().split('\n')
 
 # Function to fetch keyword search volumes using Google Keyword Planner API
-from google.ads.googleads.util import ResourceName
+from google.ads.googleads.client import GoogleAdsClient
 
 def fetch_keyword_search_volume(client, customer_id, keywords):
     try:
