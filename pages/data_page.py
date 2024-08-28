@@ -135,18 +135,26 @@ from google.ads.googleads.client import GoogleAdsClient
 
 def fetch_keyword_search_volume(client, customer_id, keywords):
     try:
+        # Initialize the KeywordPlanIdeaService
         keyword_plan_idea_service = client.get_service("KeywordPlanIdeaService")
 
+        # Create a request for generating keyword ideas
         request = client.get_type("GenerateKeywordIdeasRequest")
         request.customer_id = customer_id.replace("-", "")  # Ensure the ID format is correct
-        request.language = client.get_service("GoogleAdsService").language_constants["1000"]  # English language ID
-        request.geo_target_constants.extend(
-            [client.get_service("GoogleAdsService").geo_target_constants["2840"]]  # US location ID
-        )
+        
+        # Set language resource name
+        request.language = "languageConstants/1000"  # English language ID
+
+        # Set location resource name
+        request.geo_target_constants.append("geoTargetConstants/2840")  # US location ID
+
+        # Add the keyword seed
         request.keyword_seed.keywords.extend(keywords)
 
+        # Fetch keyword ideas
         response = keyword_plan_idea_service.generate_keyword_ideas(request=request)
 
+        # Process the response to get search volumes
         search_volumes = {}
         for idea in response.results:
             search_volumes[idea.text] = idea.keyword_idea_metrics.avg_monthly_searches
