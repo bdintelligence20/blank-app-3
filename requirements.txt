@@ -17,3 +17,4 @@ google-ads
 pytrends
 PyPDF2
 python-docx
+pymilvus

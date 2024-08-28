@@ -15,6 +15,7 @@ import PyPDF2
 import docx
 import matplotlib.pyplot as plt
 import seaborn as sns
+from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -30,6 +31,19 @@ api_key = st.secrets["openai"]["api_key"]
 
 # Initialize OpenAI client
 client = OpenAI(api_key=api_key)
+
+# Connect to Milvus
+connections.connect("default", host="localhost", port="19530")
+
+# Define Milvus collection schema
+fields = [
+    FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+    FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536),
+]
+schema = CollectionSchema(fields, "Collection for storing text embeddings")
+
+# Create Milvus collection
+collection = Collection("text_embeddings", schema)
 
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
@@ -326,3 +340,35 @@ st.write("### Web Search")
 search_query = st.text_input("Enter a search query for additional information:")
 if st.button("Search Web"):
     st.write("Web search feature is not implemented in this script.")
+
+# Milvus Integration: Store and Query Embeddings
+def store_embeddings(texts):
+    embeddings = []
+    for text in texts:
+        response = client.embeddings.create(
+            model="text-embedding-ada-002",
+            input=text
+        )
+        embeddings.append(response['data'][0]['embedding'])
+    ids = [i for i in range(len(embeddings))]
+    collection.insert([ids, embeddings])
+
+def search_embeddings(query_text, top_k=5):
+    response = client.embeddings.create(
+        model="text-embedding-ada-002",
+        input=query_text
+    )
+    query_embedding = response['data'][0]['embedding']
+    search_params = {"metric_type": "IP", "params": {"nprobe": 10}}
+    results = collection.search([query_embedding], "embedding", search_params, limit=top_k)
+    return results
+
+if st.button("Store Embeddings"):
+    store_embeddings(st.session_state['all_texts'])
+    st.success("Embeddings have been stored in Milvus.")
+
+if st.button("Search Embeddings"):
+    query_text = st.text_input("Enter query text to search embeddings:")
+    if query_text:
+        search_results = search_embeddings(query_text)
+        st.write(search_results)
