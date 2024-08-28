@@ -13,7 +13,6 @@ from bs4.element import Comment
 import time
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
-from google.ads.googleads.util import ResourceName
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
