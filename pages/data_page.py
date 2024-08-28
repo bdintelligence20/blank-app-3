@@ -11,10 +11,8 @@ import requests
 from bs4 import BeautifulSoup
 from bs4.element import Comment
 import time
-from pytrends.request import TrendReq  # Import Pytrends
-
-# Initialize Pytrends
-pytrends = TrendReq(hl='en-US', tz=360)
+import PyPDF2
+import docx
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -37,6 +35,7 @@ def preprocess_text(text):
     tokens = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
     return ' '.join(tokens)
 
+# Function to clean division names
 def clean_division_names(df):
     df['Division'] = df['Division (TD, TT, TA, Impactful)'].str.strip().replace({
         'TD': 'Talent Development',
@@ -157,6 +156,53 @@ def scrape_website(url):
     
     return scraped_data
 
+# Function to extract text from DOCX files
+def extract_text_from_docx(docx_file):
+    doc = docx.Document(docx_file)
+    full_text = []
+    for para in doc.paragraphs:
+        full_text.append(para.text)
+    return '\n'.join(full_text)
+
+# Function to extract text from PDF files
+def extract_text_from_pdf(pdf_file):
+    pdf_reader = PyPDF2.PdfReader(pdf_file)
+    full_text = []
+    for page in pdf_reader.pages:
+        full_text.append(page.extract_text())
+    return '\n'.join(full_text)
+
+# Function to process uploaded files of various formats
+def process_uploaded_files(files):
+    text_data = []
+    for file in files:
+        if file.type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or file.type == 'application/vnd.ms-excel':
+            df = pd.read_excel(file)
+            text_data.extend(df.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
+        elif file.type == 'text/csv':
+            df = pd.read_csv(file)
+            text_data.extend(df.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
+        elif file.type == 'application/pdf':
+            text_data.append(extract_text_from_pdf(file))
+        elif file.type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+            text_data.append(extract_text_from_docx(file))
+    return text_data
+
+# Function to extract text from multiple URLs
+def extract_text_from_urls(urls):
+    text_data = []
+    for url in urls:
+        try:
+            response = requests.get(url, verify=False)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
+            texts = soup.find_all(text=True)
+            visible_texts = filter(tag_visible, texts)
+            text_data.append(" ".join(t.strip() for t in visible_texts))
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error fetching the URL: {e}")
+    return text_data
+
 # Function to extract keywords from text data
 def extract_keywords(texts, n=10):
     vectorizer = CountVectorizer(stop_words='english', ngram_range=(1, 3))
@@ -166,155 +212,56 @@ def extract_keywords(texts, n=10):
     keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
     return keyword_counts.head(n)
 
-# Function to fetch Google Trends data for a list of keywords
-def get_trends_data(keywords):
-    trends_data = {}
-    for keyword in keywords:
-        try:
-            pytrends.build_payload([keyword], timeframe='today 12-m', geo='', gprop='')
-            data = pytrends.interest_over_time()
-            if not data.empty:
-                trends_data[keyword] = data
-            # Add a delay to prevent hitting the rate limit
-            time.sleep(5)  # Adjust the sleep time as needed
-        except Exception as e:
-            st.error(f"Error fetching trends data for keyword '{keyword}': {e}")
-    return trends_data
-
 # Streamlit UI
-st.title("Text Analysis with GPT-4 and Google Trends")
+st.title("Text Analysis with GPT-4")
 
-# URL input for scraping
-url = st.text_input("Enter a URL to scrape data:")
-uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx"])
+# Multi-line text input for URLs
+urls_input = st.text_area("Enter URLs to scrape data (one per line):")
+urls = [url.strip() for url in urls_input.splitlines() if url.strip()]
 
-# Display all results without any filtering
+# Multiple file uploader
+uploaded_files = st.file_uploader("Upload multiple files", type=["xlsx", "csv", "pdf", "docx"], accept_multiple_files=True)
+
+# Button to start processing
 if st.button("Submit"):
-    web_texts = []
-    excel_texts = []
+    all_texts = []
 
-    # Check if URL is provided for scraping
-    if url:
-        scraped_data = scrape_website(url)
-        if scraped_data:
-            for page, text in scraped_data.items():
-                st.write(f"### Scraped Content from {page}")
-                st.write(text)
-                web_texts.append(text)
-                
-                # Use LLM to generate insights from scraped text
-                web_insights = generate_web_insights(text)
-                st.write(f"#### Insights for {page}")
-                st.write(web_insights)
+    # Extract text from URLs
+    if urls:
+        url_texts = extract_text_from_urls(url)
+        st.write("## Scraped Content from URLs")
+        for i, text in enumerate(url_texts):
+            st.write(f"### URL {i + 1}")
+            st.write(text)
+            all_texts.extend(url_texts)
 
-            # Extract keywords for web scraped data
-            if web_texts:
-                keyword_counts = extract_keywords(web_texts, n=20)
-                st.write("### Short-Tail and Long-Tail Keywords for Web Scraped Data")
-                st.write(keyword_counts)
+    # Process uploaded files
+    if uploaded_files:
+        file_texts = process_uploaded_files(uploaded_files)
+        st.write("## Content Extracted from Uploaded Files")
+        for i, text in enumerate(file_texts):
+            st.write(f"### File {i + 1}")
+            st.write(text)
+            all_texts.extend(file_texts)
 
-                # Save keywords to session state
-                st.session_state['web_short_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() == 1]
-                st.session_state['web_long_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() > 1]
+    # Ensure we have text data to analyze
+    if all_texts:
+        # Extract keywords from all collected texts
+        keyword_counts = extract_keywords(all_texts, n=20)
+        st.write("### Short-Tail and Long-Tail Keywords for All Data")
+        st.write(keyword_counts)
 
-            # Save web scraped data and insights to session state
-            st.session_state['web_texts'] = web_texts
-            st.session_state['web_insights'] = [generate_web_insights(text) for text in web_texts]
-
-    # Check if an Excel file is uploaded
-    if uploaded_file is not None:
-        # Load Excel data
-        @st.cache_data
-        def load_data(file):
-            data = pd.read_excel(file)
-            data.fillna("", inplace=True)  # Fill NaN values with empty strings
-            return data
-
-        data = load_data(uploaded_file)
-
-        # Clean division names
-        data = clean_division_names(data)
-
-        # Process Excel data without filtering
-        st.write("## Raw Data from Excel")
-        st.write(data)
-
-        # Combine all relevant columns into one
-        data['All_Problems'] = data.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1)
-        data['Processed_Text'] = data['All_Problems'].apply(preprocess_text)
-        excel_texts = data['Processed_Text'].tolist()
-
-        # Perform text vectorization using TF-IDF
-        vectorizer = TfidfVectorizer(stop_words='english')
-        X = vectorizer.fit_transform(data['Processed_Text'])
-
-        # Perform KMeans clustering
-        num_clusters = st.slider('Select number of clusters:', 2, 10, 3)
-        kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init='auto')
-        kmeans.fit(X)
-
-        data['Cluster'] = kmeans.labels_
-
-        # Initialize a list to store cluster labels
-        cluster_labels = []
-
-        # Generate labels for each cluster
-        for cluster_num in range(num_clusters):
-            cluster_data = data[data['Cluster'] == cluster_num]['All_Problems'].tolist()
-            # Check if there is any data for this cluster
-            if cluster_data:
-                cluster_label = generate_cluster_label(' '.join(cluster_data))
-                cluster_labels.append(cluster_label)
-            else:
-                # If no data is found for a cluster, append a placeholder
-                cluster_labels.append("No data available for this cluster")
-
-        # Ensure the number of cluster labels matches the number of clusters
-        if len(cluster_labels) != num_clusters:
-            st.error("Mismatch in number of clusters and cluster labels. Adjusting...")
-            cluster_labels = cluster_labels[:num_clusters]
-
-        # Save Excel data and insights to session state
-        st.session_state['filtered_data'] = data
-        st.session_state['cluster_labels'] = cluster_labels
-        st.session_state['excel_texts'] = excel_texts
-        st.session_state['excel_clusters'] = num_clusters
-        st.session_state['excel_insights'] = [
-            generate_insights(' '.join(data[data['Cluster'] == cluster_num]['All_Problems'].tolist())) 
-            if len(data[data['Cluster'] == cluster_num]) > 0 else "No data available"
-            for cluster_num in range(num_clusters)
-        ]
-
-        # Display the processed data and insights without filtering
-        st.write("## Processed Data for Excel")
-        st.write(data)
-
-        for cluster_num in range(num_clusters):
-            st.write(f"### Cluster {cluster_num + 1}: {cluster_labels[cluster_num]}")
-            cluster_data = data[data['Cluster'] == cluster_num]['All_Problems'].tolist()
-            if cluster_data:
-                insights = generate_insights(' '.join(cluster_data))
-                st.write(insights)
-            else:
-                st.write("No data available for this cluster.")
-
-        # Extract keywords for Excel data
-        if excel_texts:
-            keyword_counts = extract_keywords(excel_texts, n=20)
-            st.write("### Short-Tail and Long-Tail Keywords for Excel Data")
-            st.write(keyword_counts)
-
-            # Save keywords to session state
-            st.session_state['excel_short_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() == 1]
-            st.session_state['excel_long_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() > 1]
+        # Save keywords to session state
+        st.session_state['all_short_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() == 1]
+        st.session_state['all_long_tail_keywords'] = keyword_counts[keyword_counts['Keyword'].str.split().str.len() > 1]
 
         # Generate comprehensive list of keywords and key phrases
-        all_keywords = st.session_state['excel_short_tail_keywords']['Keyword'].tolist() + \
-                       st.session_state['excel_long_tail_keywords']['Keyword'].tolist()
+        all_keywords = st.session_state['all_short_tail_keywords']['Keyword'].tolist() + \
+                       st.session_state['all_long_tail_keywords']['Keyword'].tolist()
 
-        # Add any additional key phrases related to problem summaries
-        problem_summaries = ' '.join(data['All_Problems'].tolist())
-        additional_keywords = generate_comprehensive_keywords(problem_summaries)
+        # Add any additional key phrases related to all text summaries
+        combined_text = ' '.join(all_texts)
+        additional_keywords = generate_comprehensive_keywords(combined_text)
         all_keywords.extend(additional_keywords)
 
         # Remove duplicates and clean the keyword list
@@ -324,70 +271,22 @@ if st.button("Submit"):
         st.write("### Comprehensive List of Keywords and Key Phrases")
         st.write(all_keywords)
 
-        # Fetch Google Trends data for the keywords and key phrases
-        st.write("### Google Trends Data for Keywords")
-        trends_data = get_trends_data(all_keywords)
-        for keyword, trend in trends_data.items():
-            st.write(f"#### Trend data for {keyword}")
-            if 'isPartial' in trend.columns:
-                trend = trend.drop(columns=['isPartial'])  # Drop the 'isPartial' column if it exists
-            st.line_chart(trend)
+        # Analyze and display insights using GPT-4
+        st.write("### Insights from All Data")
+        insights = generate_insights(combined_text)
+        st.write(insights)
 
 # Load and display previously stored data from session state
 else:
-    # Check if web data is in session state
-    if 'web_texts' in st.session_state:
-        st.write("## Web Data from Session")
-        web_texts = st.session_state['web_texts']
-        web_insights = st.session_state['web_insights']
+    # Check if text data is in session state
+    if 'all_short_tail_keywords' in st.session_state:
+        st.write("### Short-Tail Keywords for All Data")
+        st.write(st.session_state['all_short_tail_keywords'])
         
-        for i, text in enumerate(web_texts):
-            st.write(f"### Scraped Content {i + 1}")
-            st.write(text)
-            st.write(f"#### Insights for Scraped Content {i + 1}")
-            st.write(web_insights[i])
-
-        # Display previously stored keywords
-        if 'web_short_tail_keywords' in st.session_state and 'web_long_tail_keywords' in st.session_state:
-            st.write("### Short-Tail Keywords for Web Data")
-            st.write(st.session_state['web_short_tail_keywords'])
-            st.write("### Long-Tail Keywords for Web Data")
-            st.write(st.session_state['web_long_tail_keywords'])
-
-    # Check if Excel data is in session state
-    if 'filtered_data' in st.session_state:
-        st.write("## Excel Data from Session")
-        data = st.session_state['filtered_data']
-        cluster_labels = st.session_state['cluster_labels']
-        excel_insights = st.session_state['excel_insights']
-        num_clusters = st.session_state['excel_clusters']
-
-        st.write("## Processed Data for Excel")
-        st.write(data)
-
-        for cluster_num in range(num_clusters):
-            st.write(f"### Cluster {cluster_num + 1}: {cluster_labels[cluster_num]}")
-            cluster_data = data[data['Cluster'] == cluster_num]['All_Problems'].tolist()
-            st.write(excel_insights[cluster_num])
-
-        # Display previously stored keywords
-        if 'excel_short_tail_keywords' in st.session_state and 'excel_long_tail_keywords' in st.session_state:
-            st.write("### Short-Tail Keywords for Excel Data")
-            st.write(st.session_state['excel_short_tail_keywords'])
-            st.write("### Long-Tail Keywords for Excel Data")
-            st.write(st.session_state['excel_long_tail_keywords'])
-
-        # Display comprehensive list of keywords and key phrases
-        if 'excel_short_tail_keywords' in st.session_state and 'excel_long_tail_keywords' in st.session_state:
-            all_keywords = st.session_state['excel_short_tail_keywords']['Keyword'].tolist() + \
-                           st.session_state['excel_long_tail_keywords']['Keyword'].tolist()
-
-            # Fetch Google Trends data for the keywords and key phrases
-            st.write("### Google Trends Data for Keywords")
-            trends_data = get_trends_data(all_keywords)
-            for keyword, trend in trends_data.items():
-                st.write(f"#### Trend data for {keyword}")
-                if 'isPartial' in trend.columns:
-                    trend = trend.drop(columns=['isPartial'])  # Drop the 'isPartial' column if it exists
-                st.line_chart(trend)
-
+    if 'all_long_tail_keywords' in st.session_state:
+        st.write("### Long-Tail Keywords for All Data")
+        st.write(st.session_state['all_long_tail_keywords'])
+    
+    if 'excel_insights' in st.session_state:
+        st.write("### Insights from All Data")
+        st.write(st.session_state['excel_insights'])

@@ -15,3 +15,5 @@ requests
 bs4
 google-ads
 pytrends
+PyPDF2
+docx
