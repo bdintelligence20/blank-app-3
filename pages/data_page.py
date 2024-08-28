@@ -11,8 +11,6 @@ import requests
 from bs4 import BeautifulSoup
 from bs4.element import Comment
 import time
-from google.ads.googleads.client import GoogleAdsClient
-from google.ads.googleads.errors import GoogleAdsException
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -25,28 +23,9 @@ sia = SentimentIntensityAnalyzer()
 
 # Access API keys from Streamlit secrets
 api_key = st.secrets["openai"]["api_key"]
-developer_token = st.secrets["google_api"]["developer_token"]
-client_id = st.secrets["google_api"]["client_id"]
-client_secret = st.secrets["google_api"]["client_secret"]
-refresh_token = st.secrets["google_api"]["refresh_token"]
 
 # Initialize OpenAI client
 client = OpenAI(api_key=api_key)
-
-# Function to initialize Google Ads client
-def initialize_google_ads_client():
-    google_ads_client = GoogleAdsClient.load_from_dict({
-        "developer_token": st.secrets["google_api"]["developer_token"],
-        "client_id": st.secrets["google_api"]["client_id"],
-        "client_secret": st.secrets["google_api"]["client_secret"],
-        "refresh_token": st.secrets["google_api"]["refresh_token"],
-        "login_customer_id": 5109321064,  # Add your manager account ID if you are using one
-        "use_proto_plus": True
-    })
-    return google_ads_client
-
-# Initialize Google Ads client
-google_ads_client = initialize_google_ads_client()
 
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
@@ -130,44 +109,6 @@ def generate_comprehensive_keywords(text):
     )
     return response.choices[0].message.content.strip().split('\n')
 
-# Function to fetch keyword search volumes using Google Keyword Planner API
-from google.ads.googleads.client import GoogleAdsClient
-
-def fetch_keyword_search_volume(client, customer_id, keywords):
-    try:
-        # Initialize the KeywordPlanIdeaService
-        keyword_plan_idea_service = client.get_service("KeywordPlanIdeaService")
-
-        # Create a request for generating keyword ideas
-        request = client.get_type("GenerateKeywordIdeasRequest")
-        request.customer_id = customer_id.replace("-", "")  # Ensure the ID format is correct
-        
-        # Set language resource name
-        request.language = "languageConstants/1000"  # English language ID
-
-        # Set location resource name
-        request.geo_target_constants.append("geoTargetConstants/2840")  # US location ID
-
-        # Add the keyword seed
-        request.keyword_seed.keywords.extend(keywords)
-
-        # Fetch keyword ideas
-        response = keyword_plan_idea_service.generate_keyword_ideas(request=request)
-
-        # Process the response to get search volumes
-        search_volumes = {}
-        for idea in response.results:
-            search_volumes[idea.text] = idea.keyword_idea_metrics.avg_monthly_searches
-
-        return search_volumes
-
-    except GoogleAdsException as ex:
-        st.error(f"Request with ID '{ex.request_id}' failed with status '{ex.error.code().name}' and includes the following errors:")
-        for error in ex.failure.errors:
-            st.error(f"\tError with message '{error.message}'.")
-        return {}
-
-
 # Function to check if a tag is visible
 def tag_visible(element):
     if element.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]']:
@@ -212,7 +153,6 @@ def scrape_website(url):
     
     return scraped_data
 
-# Function to extract keywords from text data
 # Function to extract keywords from text data
 def extract_keywords(texts, n=10):
     vectorizer = CountVectorizer(stop_words='english', ngram_range=(1, 3))
@@ -289,7 +229,7 @@ if st.button("Submit"):
         vectorizer = TfidfVectorizer(stop_words='english')
         X = vectorizer.fit_transform(data['Processed_Text'])
 
-        # Perform KMeans clustering
+                # Perform KMeans clustering
         num_clusters = st.slider('Select number of clusters:', 2, 10, 3)
         kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init='auto')
         kmeans.fit(X)
@@ -365,11 +305,6 @@ if st.button("Submit"):
         st.write("### Comprehensive List of Keywords and Key Phrases")
         st.write(all_keywords)
 
-        # Fetch search volumes for the keywords and key phrases using Google Keyword Planner API
-        keyword_search_volumes = fetch_keyword_search_volume(google_ads_client, '510-932-1064', all_keywords)
-        st.write("### Keyword and Key Phrase Search Volumes")
-        st.write(keyword_search_volumes)
-
 # Load and display previously stored data from session state
 else:
     # Check if web data is in session state
@@ -418,10 +353,6 @@ else:
         if 'excel_short_tail_keywords' in st.session_state and 'excel_long_tail_keywords' in st.session_state:
             all_keywords = st.session_state['excel_short_tail_keywords']['Keyword'].tolist() + \
                            st.session_state['excel_long_tail_keywords']['Keyword'].tolist()
-
-            # Fetch search volumes for the keywords and key phrases using Google Keyword Planner API
-            keyword_search_volumes = fetch_keyword_search_volume(google_ads_client, '510-932-1064', all_keywords)
-            st.write("### Keyword and Key Phrase Search Volumes")
-            st.write(keyword_search_volumes)
-
+            st.write("### Comprehensive List of Keywords and Key Phrases")
+            st.write(all_keywords)
 
