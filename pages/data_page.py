@@ -35,14 +35,15 @@ client = OpenAI(api_key=api_key)
 
 # Function to initialize Google Ads client
 def initialize_google_ads_client():
-    client = GoogleAdsClient.load_from_dict({
-        "developer_token": developer_token,
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "refresh_token": refresh_token,
+    google_ads_client = GoogleAdsClient.load_from_dict({
+        "developer_token": st.secrets["google_api"]["developer_token"],
+        "client_id": st.secrets["google_api"]["client_id"],
+        "client_secret": st.secrets["google_api"]["client_secret"],
+        "refresh_token": st.secrets["google_api"]["refresh_token"],
+        "login_customer_id": 5109321064,  # Add your manager account ID if you are using one
         "use_proto_plus": True
     })
-    return client
+    return google_ads_client
 
 # Initialize Google Ads client
 google_ads_client = initialize_google_ads_client()
@@ -136,22 +137,14 @@ def fetch_keyword_search_volume(client, customer_id, keywords):
     try:
         keyword_plan_idea_service = client.get_service("KeywordPlanIdeaService")
 
-        # Create a request
         request = client.get_type("GenerateKeywordIdeasRequest")
-        request.customer_id = customer_id
-        
-        # Set language constant (English)
-        language_constant_id = client.get_service("GoogleAdsService").language_constant_path(1000)  # English language ID
-        request.language = language_constant_id
-
-        # Set geo target constant (US)
-        geo_target_constant_id = client.get_service("GoogleAdsService").geo_target_constant_path(2840)  # US location ID
-        request.geo_target_constants.append(geo_target_constant_id)
-
-        # Set the keyword seed
+        request.customer_id = customer_id.replace("-", "")  # Ensure the ID format is correct
+        request.language = client.get_service("GoogleAdsService").language_constants["1000"]  # English language ID
+        request.geo_target_constants.extend(
+            [client.get_service("GoogleAdsService").geo_target_constants["2840"]]  # US location ID
+        )
         request.keyword_seed.keywords.extend(keywords)
 
-        # Send the request and process the response
         response = keyword_plan_idea_service.generate_keyword_ideas(request=request)
 
         search_volumes = {}
@@ -165,7 +158,6 @@ def fetch_keyword_search_volume(client, customer_id, keywords):
         for error in ex.failure.errors:
             st.error(f"\tError with message '{error.message}'.")
         return {}
-
 
 
 # Function to check if a tag is visible
