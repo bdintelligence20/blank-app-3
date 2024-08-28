@@ -40,7 +40,7 @@ def initialize_google_ads_client():
         "client_id": st.secrets["google_api"]["client_id"],
         "client_secret": st.secrets["google_api"]["client_secret"],
         "refresh_token": st.secrets["google_api"]["refresh_token"],
-        "login_customer_id": 5109321064,  # Add your manager account ID if you are using one
+        "login_customer_id": 6754643235,  # Add your manager account ID if you are using one
         "use_proto_plus": True
     })
     return google_ads_client
