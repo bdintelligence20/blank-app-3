@@ -10,7 +10,7 @@ import spacy
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from pymilvus import MilvusClient
 import nltk
-from streamlit_tags import st_tags
+from streamlit_tags import st_tags, st_tags_sidebar
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -143,15 +143,29 @@ def generate_advanced_graph(data, graph_type="scatter"):
 # Store data and allow querying through a chatbot interface
 st.title("Interactive Chatbot for Data Analysis")
 
-# Define available chips
-available_chips = ["Data Upload", "Sentiment Analysis", "K-means Clustering", "Advanced Graph"]
+# Define standard analysis chips
+standard_chips = ["Sentiment Analysis", "K-means Clustering", "Advanced Graph"]
+
+# Initialize session state for data chips
+if 'data_chips' not in st.session_state:
+    st.session_state['data_chips'] = []
+
+# File uploader for data input
+uploaded_file = st.file_uploader("Upload a CSV file", type="csv")
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
+    st.session_state['all_texts'] = df['text_column'].tolist()  # Adjust 'text_column' to your specific column name
+    st.session_state['data_chips'].append(uploaded_file.name)
+
+# Combine data chips and standard chips
+all_chips = st.session_state['data_chips'] + standard_chips
 
 # Drag-and-drop chips interface
 selected_chips = st_tags(
     label='Drag and drop chips into the query field:',
     text='Press enter to add more',
     value=[],
-    suggestions=available_chips,
+    suggestions=all_chips,
     maxtags=10,
     key='1'
 )
@@ -162,7 +176,7 @@ if 'all_texts' in st.session_state:
     user_query = st.text_input("Ask a question about the data or request a graph:")
     
     if st.button("Submit Query"):
-        if "Data Upload" in selected_chips:
+        if any(chip in selected_chips for chip in st.session_state['data_chips']):
             st.write("Data has been uploaded.")
         
         if "Sentiment Analysis" in selected_chips:
