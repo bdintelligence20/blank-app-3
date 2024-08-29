@@ -10,7 +10,7 @@ import spacy
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from pymilvus import MilvusClient
 import nltk
-from streamlit_tags import st_tags, st_tags_sidebar
+from streamlit_tags import st_tags
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -41,15 +41,6 @@ def chunk_text(text, chunk_size=2000):
     words = text.split()
     for i in range(0, len(words), chunk_size):
         yield ' '.join(words[i:i + chunk_size])
-
-# Function to extract keywords from text data
-def extract_keywords(texts, n=10):
-    vectorizer = CountVectorizer(stop_words='english', ngram_range=(1, 3))
-    X = vectorizer.fit_transform(texts)
-    keywords = vectorizer.get_feature_names_out()
-    counts = X.toarray().sum(axis=0)
-    keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
-    return keyword_counts.head(n)
 
 # Function to get embeddings using OpenAI and store in Milvus Lite
 def get_embedding(text, model="text-embedding-ada-002"):
@@ -150,63 +141,72 @@ st.title("Interactive Chatbot for Data Analysis")
 # Define standard analysis chips
 standard_chips = ["Sentiment Analysis", "K-means Clustering", "Advanced Graph"]
 
-
-# Combine data chips and standard chips
-all_chips = standard_chips
-
 # Drag-and-drop chips interface
 selected_chips = st_tags(
     label='Drag and drop chips into the query field:',
     text='Press enter to add more',
     value=[],
-    suggestions=all_chips,
+    suggestions=standard_chips,
     maxtags=10,
     key='1'
 )
 
-# Chatbot interface for querying embeddings
-if 'all_texts' in st.session_state:
-    st.write("### Chat with the Data")
-    user_query = st.text_input("Ask a question about the data or request a graph:")
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Display chat messages from history on app rerun
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Accept user input
+if prompt := st.chat_input("Ask a question about the data or request a graph:"):
+    # Display user message in chat message container
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    # Process the query based on selected chips
+    if "Sentiment Analysis" in selected_chips:
+        st.write("Performing sentiment analysis on the data...")
+        sentiments = perform_sentiment_analysis(st.session_state['all_texts'])
+        st.write(sentiments)
     
-    if st.button("Submit Query"):
-        if any(chip in selected_chips for chip in data_chips):
-            st.write("Data has been uploaded.")
-        
-        if "Sentiment Analysis" in selected_chips:
-            st.write("Performing sentiment analysis on the data...")
-            sentiments = perform_sentiment_analysis(st.session_state['all_texts'])
-            st.write(sentiments)
-        
-        if "K-means Clustering" in selected_chips:
-            st.write("Performing K-means clustering on the data...")
-            clusters = perform_kmeans_clustering(st.session_state['all_texts'])
-            st.write(clusters)
-        
-        if "Advanced Graph" in selected_chips:
-            st.write("Generating advanced graph based on the data...")
-            data = pd.DataFrame({
-                'x': range(10),
-                'y': range(10),
-                'label': ['A']*5 + ['B']*5
-            })
-            generate_advanced_graph(data, graph_type="scatter")
-        
-        if user_query:
-            # Query the data using GPT-4
-            combined_text = ' '.join(st.session_state['all_texts'])
-            text_chunks = list(chunk_text(combined_text))
-            responses = []
-            for chunk in text_chunks:
-                response = generate_relevant_response(chunk, user_query)
-                responses.append(response)
-            full_response = " ".join(responses)
-            
-            # Summarize the full response
-            summarized_response = summarize_text(full_response)
-            st.write(summarized_response)
-        
-        # Embedding search query
-        search_results = search_embeddings(user_query)
-        st.write(search_results)
+    if "K-means Clustering" in selected_chips:
+        st.write("Performing K-means clustering on the data...")
+        clusters = perform_kmeans_clustering(st.session_state['all_texts'])
+        st.write(clusters)
+    
+    if "Advanced Graph" in selected_chips:
+        st.write("Generating advanced graph based on the data...")
+        data = pd.DataFrame({
+            'x': range(10),
+            'y': range(10),
+            'label': ['A']*5 + ['B']*5
+        })
+        generate_advanced_graph(data, graph_type="scatter")
+    
+    # Query the data using GPT-4
+    combined_text = ' '.join(st.session_state['all_texts'])
+    text_chunks = list(chunk_text(combined_text))
+    responses = []
+    for chunk in text_chunks:
+        response = generate_relevant_response(chunk, prompt)
+        responses.append(response)
+    full_response = " ".join(responses)
+    
+    # Summarize the full response
+    summarized_response = summarize_text(full_response)
+    
+    # Display assistant response in chat message container
+    with st.chat_message("assistant"):
+        st.markdown(summarized_response)
+    # Add assistant response to chat history
+    st.session_state.messages.append({"role": "assistant", "content": summarized_response})
+
+    # Embedding search query
+    search_results = search_embeddings(prompt)
+    st.write(search_results)
 
