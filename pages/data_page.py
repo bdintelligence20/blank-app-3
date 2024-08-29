@@ -316,12 +316,14 @@ if st.button("Submit"):
     if urls:
         url_texts = extract_text_from_urls(urls)
         all_texts.extend(url_texts)
+        st.session_state['data_chips'].extend(urls)  # Add URLs to data chips
 
     # Process uploaded files
     if uploaded_files:
         file_texts, file_data_frames = process_uploaded_files(uploaded_files)
         all_texts.extend(file_texts)
         data_frames.update(file_data_frames)
+        st.session_state['data_chips'].extend([file.name for file in uploaded_files])  # Add file names to data chips
 
     # Store all collected texts and data frames in session state
     st.session_state['all_texts'] = all_texts

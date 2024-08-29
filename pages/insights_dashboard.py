@@ -150,7 +150,17 @@ standard_chips = ["Sentiment Analysis", "K-means Clustering", "Advanced Graph"]
 if 'data_chips' not in st.session_state:
     st.session_state['data_chips'] = []
 
+# Load data chips from Milvus
+def load_data_chips():
+    results = client.query(
+        collection_name="text_embeddings",
+        expr="",
+        output_fields=["id"]
+    )
+    return [result["id"] for result in results]
 
+# Update session state with data chips from Milvus
+st.session_state['data_chips'] = load_data_chips()
 
 # Combine data chips and standard chips
 all_chips = st.session_state['data_chips'] + standard_chips
@@ -209,4 +219,5 @@ if 'all_texts' in st.session_state:
         
         # Embedding search query
         search_results = search_embeddings(user_query)
+        st.write(search_results)
 
