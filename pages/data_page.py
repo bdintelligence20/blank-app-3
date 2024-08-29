@@ -15,7 +15,8 @@ import PyPDF2
 import docx
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+from pymilvus import MilvusClient
+import numpy as np
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -32,18 +33,20 @@ api_key = st.secrets["openai"]["api_key"]
 # Initialize OpenAI client
 client = OpenAI(api_key=api_key)
 
-# Connect to Milvus
-connections.connect("default", host="20.127.208.46", port="19530")
+# Connect to Milvus Lite
+client = MilvusClient("./milvus_demo.db")
 
-# Define Milvus collection schema
-fields = [
-    FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-    FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536),
-]
-schema = CollectionSchema(fields, "Collection for storing text embeddings")
-
-# Create Milvus collection
-collection = Collection("text_embeddings", schema)
+# Create collection if it doesn't exist
+if "text_embeddings" not in client.list_collections():
+    client.create_collection(
+        collection_name="text_embeddings",
+        dimension=1536,  # Adjust this dimension as per your embeddings
+        primary_field_name="id",
+        id_type="INT64",
+        vector_field_name="embedding",
+        metric_type="L2",
+        auto_id=True
+    )
 
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
@@ -251,6 +254,36 @@ def query_data(df, query):
     except Exception as e:
         return f"Error querying data: {str(e)}"
 
+# Function to store embeddings in Milvus Lite
+def store_embeddings(texts):
+    embeddings = []
+    for text in texts:
+        response = client.embeddings.create(
+            model="text-embedding-ada-002",
+            input=text
+        )
+        embeddings.append(response['data'][0]['embedding'])
+    ids = [i for i in range(len(embeddings))]
+    # Insert embeddings into Milvus Lite
+    client.insert("text_embeddings", [{"id": i, "embedding": embeddings[i]} for i in range(len(embeddings))])
+
+# Function to search embeddings in Milvus Lite
+def search_embeddings(query_text, top_k=5):
+    response = client.embeddings.create(
+        model="text-embedding-ada-002",
+        input=query_text
+    )
+    query_embedding = response['data'][0]['embedding']
+    search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
+    results = client.search(
+        collection_name="text_embeddings",
+        data=[query_embedding],
+        anns_field="embedding",
+        params=search_params,
+        limit=top_k
+    )
+    return results
+
 # Store data and allow querying through a chatbot interface
 st.title("Interactive Chatbot for Data Analysis")
 
@@ -335,34 +368,7 @@ if 'all_texts' in st.session_state:
             full_response = " ".join(responses)
             st.write(full_response)
 
-# Web Search Functionality
-st.write("### Web Search")
-search_query = st.text_input("Enter a search query for additional information:")
-if st.button("Search Web"):
-    st.write("Web search feature is not implemented in this script.")
-
 # Milvus Integration: Store and Query Embeddings
-def store_embeddings(texts):
-    embeddings = []
-    for text in texts:
-        response = client.embeddings.create(
-            model="text-embedding-ada-002",
-            input=text
-        )
-        embeddings.append(response['data'][0]['embedding'])
-    ids = [i for i in range(len(embeddings))]
-    collection.insert([ids, embeddings])
-
-def search_embeddings(query_text, top_k=5):
-    response = client.embeddings.create(
-        model="text-embedding-ada-002",
-        input=query_text
-    )
-    query_embedding = response['data'][0]['embedding']
-    search_params = {"metric_type": "IP", "params": {"nprobe": 10}}
-    results = collection.search([query_embedding], "embedding", search_params, limit=top_k)
-    return results
-
 if st.button("Store Embeddings"):
     store_embeddings(st.session_state['all_texts'])
     st.success("Embeddings have been stored in Milvus.")
@@ -372,3 +378,4 @@ if st.button("Search Embeddings"):
     if query_text:
         search_results = search_embeddings(query_text)
         st.write(search_results)
+
