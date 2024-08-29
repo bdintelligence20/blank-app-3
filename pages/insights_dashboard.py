@@ -89,7 +89,7 @@ def summarize_text(text):
             {"role": "user", "content": f"Summarize the following text in a concise manner: {text}"}
         ],
         temperature=0.5,
-        max_tokens=500,
+        max_tokens=550,
         top_p=1,
         frequency_penalty=0,
         presence_penalty=0
@@ -155,7 +155,6 @@ def load_data_chips():
     try:
         results = client.query(
             collection_name="text_embeddings",
-            expr="",
             output_fields=["id"]
         )
         return [result["id"] for result in results]
