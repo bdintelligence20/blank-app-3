@@ -150,12 +150,7 @@ standard_chips = ["Sentiment Analysis", "K-means Clustering", "Advanced Graph"]
 if 'data_chips' not in st.session_state:
     st.session_state['data_chips'] = []
 
-# File uploader for data input
-uploaded_file = st.file_uploader("Upload a CSV file", type="csv")
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-    st.session_state['all_texts'] = df['text_column'].tolist()  # Adjust 'text_column' to your specific column name
-    st.session_state['data_chips'].append(uploaded_file.name)
+
 
 # Combine data chips and standard chips
 all_chips = st.session_state['data_chips'] + standard_chips
