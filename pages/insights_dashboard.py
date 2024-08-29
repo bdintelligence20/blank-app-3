@@ -93,7 +93,7 @@ def generate_relevant_response(data, query):
 # Function to handle simple queries using a smaller model
 def handle_simple_query(text, query):
     response = openai_client.chat.completions.create(
-        model="text-davinci-003",  # Use a smaller model for simple queries
+        model="gpt-4o",  # Use a smaller model for simple queries
         messages=[
             {"role": "system", "content": "You are an assistant that provides specific information from the text."},
             {"role": "user", "content": f"Based on the following text: {text}. {query}"}
