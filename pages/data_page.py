@@ -33,14 +33,7 @@ api_key = st.secrets["openai"]["api_key"]
 client = OpenAI(api_key=api_key)
 
 # Connect to Milvus
-try:
-    connections.connect("default", host="20.127.208.46", port="19530", timeout=10)
-    if utility.has_collection("text_embeddings"):
-        st.write("Successfully connected to Milvus.")
-    else:
-        st.write("Connection established but collection does not exist.")
-except Exception as e:
-    st.error(f"Failed to connect to Milvus: {e}")
+connections.connect("default", host="20.127.208.46", port="19530")
 
 # Define Milvus collection schema
 fields = [
