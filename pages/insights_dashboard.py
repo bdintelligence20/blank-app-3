@@ -11,6 +11,7 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from pymilvus import MilvusClient
 import nltk
 from streamlit_tags import st_tags
+import re
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -68,7 +69,10 @@ def search_embeddings(query_text):
     except Exception as e:
         st.error(f"Failed to query collection: {e}")
         return []
-    return results
+    
+    # Combine all results into a single text
+    combined_results = " ".join([result.entity.get("content") for result in results])
+    return combined_results
 
 # Function to generate a comprehensive and relevant response using GPT-4
 def generate_relevant_response(data, query):
@@ -86,12 +90,31 @@ def generate_relevant_response(data, query):
     )
     return response.choices[0].message.content.strip()
 
-# Function to generate a pie chart based on keyword counts
-def generate_pie_chart(data):
-    fig, ax = plt.subplots()
-    ax.pie(data['Count'], labels=data['Keyword'], autopct='%1.1f%%', startangle=90)
-    ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-    st.pyplot(fig)
+# Function to handle simple queries using a smaller model
+def handle_simple_query(text, query):
+    response = openai_client.chat.completions.create(
+        model="text-davinci-003",  # Use a smaller model for simple queries
+        messages=[
+            {"role": "system", "content": "You are an assistant that provides specific information from the text."},
+            {"role": "user", "content": f"Based on the following text: {text}. {query}"}
+        ],
+        temperature=0.3,
+        max_tokens=500,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0
+    )
+    return response.choices[0].message.content.strip()
+
+# Function to extract emails from text
+def extract_emails(text):
+    return re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text)
+
+# Function to extract divisions from text (example implementation)
+def extract_divisions(text):
+    # This is a placeholder implementation. Adjust based on your document structure.
+    divisions = re.findall(r'\bDivision\s+\w+\b', text)
+    return divisions
 
 # Function to perform sentiment analysis
 def perform_sentiment_analysis(texts):
@@ -163,43 +186,47 @@ if prompt := st.chat_input("Ask a question about the selected document:"):
         selected_index = document_options.index(selected_document)
         selected_text = st.session_state['all_texts'][selected_index]
 
-        # Process the query based on selected chips
-        if "Sentiment Analysis" in selected_chips:
-            st.write("Performing sentiment analysis on the data...")
-            sentiments = perform_sentiment_analysis([selected_text])
-            st.write(sentiments)
-        
-        if "K-means Clustering" in selected_chips:
-            st.write("Performing K-means clustering on the data...")
-            clusters = perform_kmeans_clustering([selected_text])
-            st.write(clusters)
-        
-        if "Advanced Graph" in selected_chips:
-            st.write("Generating advanced graph based on the data...")
-            data = pd.DataFrame({
-                'x': range(10),
-                'y': range(10),
-                'label': ['A']*5 + ['B']*5
-            })
-            generate_advanced_graph(data, graph_type="scatter")
-        
-        # Query the data using GPT-4
-        text_chunks = list(chunk_text(selected_text))
-        responses = []
-        for chunk in text_chunks:
-            response = generate_relevant_response(chunk, prompt)
-            responses.append(response)
-        full_response = " ".join(responses)
-        
-        # Display assistant response in chat message container
-        with st.chat_message("assistant"):
-            st.markdown(full_response)
-        # Add assistant response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
+        # Handle simple queries using a smaller model
+        simple_response = handle_simple_query(selected_text, prompt)
+        if simple_response:
+            st.write(simple_response)
+        else:
+            # Process the query based on selected chips
+            if "Sentiment Analysis" in selected_chips:
+                st.write("Performing sentiment analysis on the data...")
+                sentiments = perform_sentiment_analysis([selected_text])
+                st.write(sentiments)
+            
+            if "K-means Clustering" in selected_chips:
+                st.write("Performing K-means clustering on the data...")
+                clusters = perform_kmeans_clustering([selected_text])
+                st.write(clusters)
+            
+            if "Advanced Graph" in selected_chips:
+                st.write("Generating advanced graph based on the data...")
+                data = pd.DataFrame({
+                    'x': range(10),
+                    'y': range(10),
+                    'label': ['A']*5 + ['B']*5
+                })
+                generate_advanced_graph(data, graph_type="scatter")
+            
+            # Query the data using GPT-4
+            text_chunks = list(chunk_text(selected_text))
+            responses = []
+            for chunk in text_chunks:
+                response = generate_relevant_response(chunk, prompt)
+                responses.append(response)
+            full_response = " ".join(responses)
+            
+            # Display assistant response in chat message container
+            with st.chat_message("assistant"):
+                st.markdown(full_response)
+            # Add assistant response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
 
-        # Embedding search query
-        search_results = search_embeddings(prompt)
-        st.write(search_results)
+            # Embedding search query
+            search_results = search_embeddings(prompt)
+            st.write(search_results)
     else:
         st.error("No data available. Please upload data on the data page.")
-
