@@ -15,7 +15,7 @@ import PyPDF2
 import docx
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType
+from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -33,7 +33,14 @@ api_key = st.secrets["openai"]["api_key"]
 client = OpenAI(api_key=api_key)
 
 # Connect to Milvus
-connections.connect("default", host="20.127.208.46", port="19530")
+try:
+    connections.connect("default", host="20.127.208.46", port="19530", timeout=10)
+    if utility.has_collection("text_embeddings"):
+        st.write("Successfully connected to Milvus.")
+    else:
+        st.write("Connection established but collection does not exist.")
+except Exception as e:
+    st.error(f"Failed to connect to Milvus: {e}")
 
 # Define Milvus collection schema
 fields = [
