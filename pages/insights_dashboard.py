@@ -8,7 +8,6 @@ from sklearn.cluster import KMeans
 from openai import OpenAI
 import spacy
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
-from pymilvus import MilvusClient
 import nltk
 from streamlit_tags import st_tags
 import re
@@ -28,9 +27,6 @@ api_key = st.secrets["openai"]["api_key"]
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=api_key)
 
-# Connect to Milvus Lite
-client = MilvusClient("./milvus_demo.db")
-
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
     doc = nlp(text.lower())
@@ -42,37 +38,6 @@ def chunk_text(text, chunk_size=2000):
     words = text.split()
     for i in range(0, len(words), chunk_size):
         yield ' '.join(words[i:i + chunk_size])
-
-# Function to get embeddings using OpenAI and store in Milvus Lite
-def get_embedding(text, model="text-embedding-ada-002"):
-    text = text.replace("\n", " ")
-    if not text.strip():  # Ensure the text is not empty
-        raise ValueError("Input text for embedding is empty.")
-    response = openai_client.embeddings.create(input=[text], model=model)
-    return response.data[0].embedding
-
-# Function to search embeddings in Milvus Lite
-def search_embeddings(query_text):
-    # Preprocess query text
-    preprocessed_query = preprocess_text(query_text)
-    query_embedding = get_embedding(preprocessed_query)
-    
-    search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
-    try:
-        results = client.search(
-            collection_name="text_embeddings",
-            data=[query_embedding],
-            anns_field="embedding",
-            param=search_params,  # Corrected parameter name
-            output_fields=["content"]
-        )
-    except Exception as e:
-        st.error(f"Failed to query collection: {e}")
-        return []
-    
-    # Combine all results into a single text
-    combined_results = " ".join([result.entity.get("content") for result in results])
-    return combined_results
 
 # Function to generate a comprehensive and relevant response using GPT-4
 def generate_relevant_response(data, query):
@@ -224,9 +189,5 @@ if prompt := st.chat_input("Ask a question about the selected document:"):
                 st.markdown(full_response)
             # Add assistant response to chat history
             st.session_state.messages.append({"role": "assistant", "content": full_response})
-
-            # Embedding search query
-            search_results = search_embeddings(prompt)
-            st.write(search_results)
     else:
         st.error("No data available. Please upload data on the data page.")

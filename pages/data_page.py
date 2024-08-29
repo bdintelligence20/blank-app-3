@@ -13,7 +13,6 @@ import PyPDF2
 import docx
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pymilvus import MilvusClient, DataType
 import numpy as np
 
 # Download necessary NLTK data
@@ -31,9 +30,6 @@ api_key = st.secrets["openai"]["api_key"]
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=api_key)
 
-# Connect to Milvus Lite
-client = MilvusClient("./milvus_demo.db")
-
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
     doc = nlp(text.lower())
@@ -45,42 +41,6 @@ def chunk_text(text, chunk_size=2000):
     words = text.split()
     for i in range(0, len(words), chunk_size):
         yield ' '.join(words[i:i + chunk_size])
-
-# Function to get embeddings using OpenAI and store in Milvus Lite
-def get_embedding(text, model="text-embedding-ada-002"):
-    text = text.replace("\n", " ")
-    if not text.strip():  # Ensure the text is not empty
-        raise ValueError("Input text for embedding is empty.")
-    response = openai_client.embeddings.create(input=[text], model=model)
-    return response.data[0].embedding
-
-# Function to store embeddings in Milvus Lite
-def store_embeddings(texts):
-    data = []
-    for text in texts:
-        preprocessed_text = preprocess_text(text)
-        if preprocessed_text:
-            embedding = get_embedding(preprocessed_text)
-            data.append({
-                "content": text[:65535],  # Truncate to fit VARCHAR max_length
-                "embedding": embedding
-            })
-
-    if data:
-        client.insert("text_embeddings", data)
-
-# Function to create collection if it doesn't exist
-def create_collection():
-    if "text_embeddings" not in client.list_collections():
-        client.create_collection(
-            collection_name="text_embeddings",
-            dimension=1536,  # Adjust dimension as per your embeddings
-            primary_field_name="id",
-            vector_field_name="embedding",
-            id_type=DataType.INT64,
-            metric_type="L2",
-            auto_id=True
-        )
 
 # Function to extract text from URLs
 def extract_text_from_urls(urls):
@@ -176,12 +136,3 @@ if st.button("Submit"):
 
     # Notify user that data has been scraped
     st.success("Data has been successfully scraped.")
-
-    # Create collection if it doesn't exist
-    create_collection()
-
-    # Store texts in Milvus
-    store_embeddings(all_texts)
-
-    # Notify user that data has been stored
-    st.success("Data has been stored in Milvus.")
