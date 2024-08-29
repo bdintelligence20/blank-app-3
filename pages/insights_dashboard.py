@@ -2,13 +2,24 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.express as px
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.cluster import KMeans
 from openai import OpenAI
 import spacy
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from pymilvus import MilvusClient
+import nltk
+from streamlit_tags import st_tags
+
+# Download necessary NLTK data
+nltk.download('vader_lexicon')
 
 # Load spaCy English model
 nlp = spacy.load("en_core_web_sm")
+
+# Initialize NLTK's SentimentIntensityAnalyzer
+sia = SentimentIntensityAnalyzer()
 
 # Access API keys from Streamlit secrets
 api_key = st.secrets["openai"]["api_key"]
@@ -97,8 +108,53 @@ def generate_relevant_response(data, query):
     )
     return response.choices[0].message.content.strip()
 
+# Function to generate a pie chart based on keyword counts
+def generate_pie_chart(data):
+    fig, ax = plt.subplots()
+    ax.pie(data['Count'], labels=data['Keyword'], autopct='%1.1f%%', startangle=90)
+    ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+    st.pyplot(fig)
+
+# Function to perform sentiment analysis
+def perform_sentiment_analysis(texts):
+    sentiments = [sia.polarity_scores(text) for text in texts]
+    sentiment_df = pd.DataFrame(sentiments)
+    return sentiment_df
+
+# Function to perform K-means clustering
+def perform_kmeans_clustering(texts, n_clusters=5):
+    vectorizer = CountVectorizer(stop_words='english')
+    X = vectorizer.fit_transform(texts)
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    kmeans.fit(X)
+    clusters = kmeans.labels_
+    return clusters
+
+# Function to generate advanced data graphs using Plotly
+def generate_advanced_graph(data, graph_type="scatter"):
+    if graph_type == "scatter":
+        fig = px.scatter(data, x='x', y='y', color='label')
+    elif graph_type == "line":
+        fig = px.line(data, x='x', y='y', color='label')
+    elif graph_type == "bar":
+        fig = px.bar(data, x='x', y='y', color='label')
+    st.plotly_chart(fig)
+
 # Store data and allow querying through a chatbot interface
 st.title("Interactive Chatbot for Data Analysis")
+
+# Define available chips
+available_chips = ["Data Upload", "Sentiment Analysis", "K-means Clustering", "Advanced Graph"]
+
+# Drag-and-drop chips interface
+selected_chips = st_tags(
+    label='Drag and drop chips into the query field:',
+    text='Press enter to add more',
+    value=[],
+    suggestions=available_chips,
+    maxtags=10,
+    key='1'
+)
 
 # Chatbot interface for querying embeddings
 if 'all_texts' in st.session_state:
@@ -106,15 +162,29 @@ if 'all_texts' in st.session_state:
     user_query = st.text_input("Ask a question about the data or request a graph:")
     
     if st.button("Submit Query"):
-        if user_query.lower().startswith("graph"):
-            # Generate a graph based on keywords or data patterns
-            st.write("Generating graph based on the data...")
-            keywords = extract_keywords(st.session_state['all_texts'], n=10)
-            fig, ax = plt.subplots()
-            sns.barplot(x='Keyword', y='Count', data=keywords, ax=ax)
-            plt.xticks(rotation=45)
-            st.pyplot(fig)
-        else:
+        if "Data Upload" in selected_chips:
+            st.write("Data has been uploaded.")
+        
+        if "Sentiment Analysis" in selected_chips:
+            st.write("Performing sentiment analysis on the data...")
+            sentiments = perform_sentiment_analysis(st.session_state['all_texts'])
+            st.write(sentiments)
+        
+        if "K-means Clustering" in selected_chips:
+            st.write("Performing K-means clustering on the data...")
+            clusters = perform_kmeans_clustering(st.session_state['all_texts'])
+            st.write(clusters)
+        
+        if "Advanced Graph" in selected_chips:
+            st.write("Generating advanced graph based on the data...")
+            data = pd.DataFrame({
+                'x': range(10),
+                'y': range(10),
+                'label': ['A']*5 + ['B']*5
+            })
+            generate_advanced_graph(data, graph_type="scatter")
+        
+        if user_query:
             # Query the data using GPT-4
             combined_text = ' '.join(st.session_state['all_texts'])
             text_chunks = list(chunk_text(combined_text))
@@ -127,6 +197,7 @@ if 'all_texts' in st.session_state:
             # Summarize the full response
             summarized_response = summarize_text(full_response)
             st.write(summarized_response)
+        
         # Embedding search query
         search_results = search_embeddings(user_query)
 

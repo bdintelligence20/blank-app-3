@@ -18,3 +18,5 @@ pytrends
 PyPDF2
 python-docx
 pymilvus
+plotly
+streamlit-tags
