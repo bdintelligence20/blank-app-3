@@ -2,113 +2,128 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.feature_extraction.text import CountVectorizer
+from openai import OpenAI
+import spacy
+from pymilvus import MilvusClient
 
-# Debug function to print session state keys
-def print_session_state():
-    st.write("### Session State Keys")
-    st.write(list(st.session_state.keys()))
+# Load spaCy English model
+nlp = spacy.load("en_core_web_sm")
 
-# Function to display top 5 problems per division based on problem-solving questionnaire
-def display_top_problems_per_division():
-    st.subheader("Top 5 Problems Per Division Based on Problem Solving Questionnaire")
-    divisions = ['Talent Development', 'Talent Technology', 'Talent Advisory', 'Africa', 'Corporate', 'Marketing']
-    for division in divisions:
-        if f'{division}_problems' in st.session_state:
-            st.write(f"**{division}**")
-            problems = st.session_state[f'{division}_problems']
-            for problem in problems:
-                st.write(f"- {problem}")
-            st.write("")
+# Access API keys from Streamlit secrets
+api_key = st.secrets["openai"]["api_key"]
+
+# Initialize OpenAI client
+openai_client = OpenAI(api_key=api_key)
+
+# Connect to Milvus Lite
+client = MilvusClient("./milvus_demo.db")
+
+# Function to preprocess text data using spaCy
+def preprocess_text(text):
+    doc = nlp(text.lower())
+    tokens = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
+    return ' '.join(tokens)
+
+# Function to chunk text into manageable sizes for the model
+def chunk_text(text, chunk_size=2000):
+    words = text.split()
+    for i in range(0, len(words), chunk_size):
+        yield ' '.join(words[i:i + chunk_size])
+
+# Function to extract keywords from text data
+def extract_keywords(texts, n=10):
+    vectorizer = CountVectorizer(stop_words='english', ngram_range=(1, 3))
+    X = vectorizer.fit_transform(texts)
+    keywords = vectorizer.get_feature_names_out()
+    counts = X.toarray().sum(axis=0)
+    keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
+    return keyword_counts.head(n)
+
+# Function to get embeddings using OpenAI and store in Milvus Lite
+def get_embedding(text, model="text-embedding-ada-002"):
+    text = text.replace("\n", " ")
+    if not text.strip():  # Ensure the text is not empty
+        raise ValueError("Input text for embedding is empty.")
+    response = openai_client.embeddings.create(input=[text], model=model)
+    return response.data[0].embedding
+
+# Function to search embeddings in Milvus Lite
+def search_embeddings(query_text, top_k=5):
+    # Preprocess query text
+    preprocessed_query = preprocess_text(query_text)
+    query_embedding = get_embedding(preprocessed_query)
+    
+    search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
+    results = client.search(
+        collection_name="text_embeddings",
+        data=[query_embedding],
+        anns_field="vector",
+        params=search_params,
+        limit=top_k,
+        output_fields=["vector"]
+    )
+    return results
+
+# Function to summarize long text using GPT-4
+def summarize_text(text):
+    response = openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are an expert summarizer."},
+            {"role": "user", "content": f"Summarize the following text in a concise manner: {text}"}
+        ],
+        temperature=0.5,
+        max_tokens=150,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0
+    )
+    return response.choices[0].message.content.strip()
+
+# Store data and allow querying through a chatbot interface
+st.title("Interactive Chatbot for Data Analysis")
+
+# Chatbot interface for querying embeddings
+if 'all_texts' in st.session_state:
+    st.write("### Chat with the Data")
+    user_query = st.text_input("Ask a question about the data or request a graph:")
+    
+    if st.button("Submit Query"):
+        if user_query.lower().startswith("graph"):
+            # Generate a graph based on keywords or data patterns
+            st.write("Generating graph based on the data...")
+            keywords = extract_keywords(st.session_state['all_texts'], n=10)
+            fig, ax = plt.subplots()
+            sns.barplot(x='Keyword', y='Count', data=keywords, ax=ax)
+            plt.xticks(rotation=45)
+            st.pyplot(fig)
         else:
-            st.write(f"No data available for {division}")
+            # Query the data using GPT-4
+            combined_text = ' '.join(st.session_state['all_texts'])
+            text_chunks = list(chunk_text(combined_text))
+            responses = []
+            for chunk in text_chunks:
+                response = openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "You are an intelligent assistant that provides concise and accurate answers to the user's questions based on the data provided."},
+                        {"role": "user", "content": f"Based on the following data: {chunk}. {user_query}"}
+                    ],
+                    temperature=0.3,  # Lower temperature for more concise responses
+                    max_tokens=500,
+                    top_p=1,
+                    frequency_penalty=0,
+                    presence_penalty=0
+                )
+                responses.append(response.choices[0].message.content.strip())
+            full_response = " ".join(responses)
+            
+            # Summarize the full response
+            summarized_response = summarize_text(full_response)
+            st.write(summarized_response)
 
-# Function to display consolidated clusters for all divisions
-def display_consolidated_clusters():
-    if 'consolidated_clusters' in st.session_state:
-        st.subheader("Consolidated Clusters (All Divisions)")
-        clusters = st.session_state['consolidated_clusters']
-        for idx, cluster in enumerate(clusters):
-            st.write(f"**Cluster {idx + 1}**")
-            st.write(cluster)
-            st.write("")
-    else:
-        st.write("No consolidated clusters data available.")
-
-# Function to display consolidated data visualizations
-def display_data_visualizations(data, title):
-    st.subheader(f"Consolidated Data Visualizations ({title})")
-    if data is not None and not data.empty:
-        st.write("**Keyword Frequency**")
-        fig, ax = plt.subplots()
-        sns.barplot(x='Count', y='Keyword', data=data, ax=ax)
-        ax.set_xlabel('Count')
-        ax.set_ylabel('Keyword')
-        st.pyplot(fig)
-    else:
-        st.write("No keyword data available.")
-
-# Function to display keyword data
-def display_keywords(short_tail, long_tail, title):
-    st.subheader(f"{title} Keywords")
-    st.write("**Short-Tail Keywords**")
-    if short_tail is not None and not short_tail.empty:
-        st.write(short_tail)
-    else:
-        st.write("No short-tail keywords available.")
-    
-    st.write("**Long-Tail Keywords**")
-    if long_tail is not None and not long_tail.empty:
-        st.write(long_tail)
-    else:
-        st.write("No long-tail keywords available.")
-
-st.title("Insights Dashboard")
-
-# Print session state for debugging
-print_session_state()
-
-# Check if Excel data insights are available in session state
-if 'excel_insights' in st.session_state:
-    # Data sheet upload insights
-    st.header("Data Sheet Upload")
-    
-    # Top 5 problems per division
-    display_top_problems_per_division()
-
-    # Consolidated clusters (All divisions)
-    display_consolidated_clusters()
-
-    # Consolidated data visualizations (All divisions)
-    if 'excel_keyword_data' in st.session_state:
-        display_data_visualizations(st.session_state['excel_keyword_data'], "All Divisions")
-
-    # Display keywords for Excel data
-    if 'excel_short_tail_keywords' in st.session_state and 'excel_long_tail_keywords' in st.session_state:
-        display_keywords(st.session_state['excel_short_tail_keywords'], st.session_state['excel_long_tail_keywords'], "Excel Data")
-
-# Check if web scraping insights are available in session state
-if 'web_insights' in st.session_state:
-    st.header("Web Scraping")
-
-    # Top 10 problems LRMG solves based on website
-    if 'web_problems' in st.session_state:
-        st.subheader("Top 10 Problems LRMG Solves Based on Website")
-        for problem in st.session_state['web_problems']:
-            st.write(f"- {problem}")
-
-    # Clusters based on website
-    if 'web_clusters' in st.session_state:
-        st.subheader("Clusters Based on Website")
-        display_consolidated_clusters()
-
-    # Consolidated data visualizations for web scraping
-    if 'web_keyword_data' in st.session_state:
-        display_data_visualizations(st.session_state['web_keyword_data'], "Web Scraping")
-
-    # Display keywords for web data
-    if 'web_short_tail_keywords' in st.session_state and 'web_long_tail_keywords' in st.session_state:
-        display_keywords(st.session_state['web_short_tail_keywords'], st.session_state['web_long_tail_keywords'], "Web Data")
-
-# Message if no data is available
-if 'excel_insights' not in st.session_state and 'web_insights' not in st.session_state:
-    st.write("No data available. Please upload data on the Data Page.")
+        # Embedding search query
+        search_results = search_embeddings(user_query)
+        st.write("Search results for embeddings:")
+        st.write(search_results)

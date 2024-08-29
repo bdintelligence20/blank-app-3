@@ -281,6 +281,22 @@ def search_embeddings(query_text, top_k=5):
     )
     return results
 
+# Function to summarize long text using GPT-4
+def summarize_text(text):
+    response = openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are an expert summarizer."},
+            {"role": "user", "content": f"Summarize the following text in a concise manner: {text}"}
+        ],
+        temperature=0.5,
+        max_tokens=150,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0
+    )
+    return response.choices[0].message.content.strip()
+
 # Store data and allow querying through a chatbot interface
 st.title("Interactive Chatbot for Data Analysis")
 
@@ -351,7 +367,10 @@ if 'all_texts' in st.session_state:
                 )
                 responses.append(response.choices[0].message.content.strip())
             full_response = " ".join(responses)
-            st.write(full_response)
+            
+            # Summarize the full response
+            summarized_response = summarize_text(full_response)
+            st.write(summarized_response)
 
         # Embedding search query
         search_results = search_embeddings(user_query)
