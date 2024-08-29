@@ -71,7 +71,7 @@ def search_embeddings(query_text, top_k=5):
             collection_name="text_embeddings",
             data=[query_embedding],
             anns_field="vector",
-            params=search_params,
+            param=search_params,  # Corrected parameter name
             limit=top_k,
             output_fields=["vector"]
         )
