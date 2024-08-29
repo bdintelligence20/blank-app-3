@@ -1,8 +1,7 @@
 import os
 import streamlit as st
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.cluster import KMeans
+from sklearn.feature_extraction.text import CountVectorizer
 from openai import OpenAI
 import spacy
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
