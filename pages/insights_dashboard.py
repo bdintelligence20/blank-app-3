@@ -74,7 +74,7 @@ def summarize_text(text):
             {"role": "user", "content": f"Summarize the following text in a concise manner: {text}"}
         ],
         temperature=0.5,
-        max_tokens=4000,
+        max_tokens=150,
         top_p=1,
         frequency_penalty=0,
         presence_penalty=0
@@ -127,8 +127,6 @@ if 'all_texts' in st.session_state:
             # Summarize the full response
             summarized_response = summarize_text(full_response)
             st.write(summarized_response)
-
         # Embedding search query
         search_results = search_embeddings(user_query)
-        st.write("Search results for embeddings:")
-        st.write(search_results)
+        
