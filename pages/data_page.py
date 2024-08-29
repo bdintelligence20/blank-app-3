@@ -1,4 +1,20 @@
-
+import os
+import streamlit as st
+import pandas as pd
+from sklearn.feature_extraction.text import CountVectorizer
+from openai import OpenAI
+import spacy
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import nltk
+import requests
+from bs4 import BeautifulSoup, Comment
+import time
+import PyPDF2
+import docx
+import matplotlib.pyplot as plt
+import seaborn as sns
+from pymilvus import MilvusClient
+import numpy as np
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
