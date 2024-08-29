@@ -71,15 +71,6 @@ def handle_simple_query(text, query):
     )
     return response.choices[0].message.content.strip()
 
-# Function to extract emails from text
-def extract_emails(text):
-    return re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text)
-
-# Function to extract divisions from text (example implementation)
-def extract_divisions(text):
-    # This is a placeholder implementation. Adjust based on your document structure.
-    divisions = re.findall(r'\bDivision\s+\w+\b', text)
-    return divisions
 
 # Function to perform sentiment analysis
 def perform_sentiment_analysis(texts):
