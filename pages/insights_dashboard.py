@@ -150,25 +150,9 @@ st.title("Interactive Chatbot for Data Analysis")
 # Define standard analysis chips
 standard_chips = ["Sentiment Analysis", "K-means Clustering", "Advanced Graph"]
 
-# Load data chips from Milvus
-def load_data_chips():
-    try:
-        results = client.query(
-            collection_name="text_embeddings",
-            expr="",
-            output_fields=["id"],
-            limit=100  # Add a limit to the query
-        )
-        return [result["id"] for result in results]
-    except Exception as e:
-        st.error(f"Failed to load data chips: {e}")
-        return []
-
-# Update session state with data chips from Milvus
-data_chips = load_data_chips()
 
 # Combine data chips and standard chips
-all_chips = standard_chips + data_chips
+all_chips = standard_chips
 
 # Drag-and-drop chips interface
 selected_chips = st_tags(
