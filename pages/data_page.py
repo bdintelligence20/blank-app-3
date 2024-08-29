@@ -1,8 +1,7 @@
 import os
 import streamlit as st
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.cluster import KMeans
+from sklearn.feature_extraction.text import CountVectorizer
 from openai import OpenAI
 import spacy
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
@@ -31,24 +30,39 @@ sia = SentimentIntensityAnalyzer()
 api_key = st.secrets["openai"]["api_key"]
 
 # Initialize OpenAI client
-client = OpenAI(api_key=api_key)
+openai_client = OpenAI(api_key=api_key)
 
 # Connect to Milvus Lite
-milvus_client = MilvusClient("./milvus_demo.db")
+client = MilvusClient("./milvus_demo.db")
 
-# Define collection schema
+# Define Milvus collection schema
 fields = [
-    FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-    FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536),
+    FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=False),
+    FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536)
 ]
-schema = CollectionSchema(fields, description="Collection for storing text embeddings")
+schema = CollectionSchema(fields, "Collection for storing text embeddings")
 
-# Create collection if it doesn't exist
-if "text_embeddings" not in milvus_client.list_collections():
-    milvus_client.create_collection(
-        collection_name="text_embeddings",
-        schema=schema
-    )
+# Create or load Milvus collection
+if "text_embeddings" not in client.list_collections():
+    collection = Collection("text_embeddings", schema)
+else:
+    collection = Collection("text_embeddings")
+
+# Function to store embeddings in Milvus Lite
+def store_embeddings(texts):
+    embeddings = []
+    for text in texts:
+        response = openai_client.embeddings.create(
+            model="text-embedding-ada-002",
+            input=text
+        )
+        embedding = response.data[0].embedding  # Corrected to access data correctly
+        embeddings.append(embedding)
+    
+    ids = list(range(len(embeddings)))
+    
+    # Insert embeddings into Milvus Lite
+    collection.insert([{"id": i, "embedding": embeddings[i]} for i in range(len(embeddings))])
 
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
@@ -79,7 +93,7 @@ def clean_division_names(df):
 def generate_insights(text):
     insights = []
     for chunk in chunk_text(text):
-        response = client.chat.completions.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an expert analyst."},
@@ -98,7 +112,7 @@ def generate_insights(text):
 def generate_web_insights(text):
     insights = []
     for chunk in chunk_text(text):
-        response = client.chat.completions.create(
+        response = openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an expert in analyzing website content."},
@@ -115,7 +129,7 @@ def generate_web_insights(text):
 
 # Function to generate cluster labels using GPT-4
 def generate_cluster_label(text):
-    response = client.chat.completions.create(
+    response = openai_client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are an expert analyst in identifying themes in text data."},
@@ -131,7 +145,7 @@ def generate_cluster_label(text):
 
 # Function to generate a comprehensive list of keywords and key phrases
 def generate_comprehensive_keywords(text):
-    response = client.chat.completions.create(
+    response = openai_client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are an expert in keyword analysis and SEO."},
@@ -228,15 +242,8 @@ def process_uploaded_files(files):
 def extract_text_from_urls(urls):
     text_data = []
     for url in urls:
-        try:
-            response = requests.get(url, verify=False)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, 'html.parser')
-            texts = soup.find_all(text=True)
-            visible_texts = filter(tag_visible, texts)
-            text_data.append(" ".join(t.strip() for t in visible_texts))
-        except requests.exceptions.RequestException as e:
-            st.error(f"Error fetching the URL: {e}")
+        page_content = scrape_page(url)
+        text_data.append(page_content)
     return text_data
 
 # Function to extract keywords from text data
@@ -256,40 +263,7 @@ def query_data(df, query):
     except Exception as e:
         return f"Error querying data: {str(e)}"
 
-# Function to store embeddings in Milvus Lite
-def store_embeddings(texts):
-    embeddings = []
-    for text in texts:
-        response = client.embeddings.create(
-            model="text-embedding-ada-002",
-            input=text
-        )
-        embeddings.append(response['data'][0]['embedding'])
-    ids = [i for i in range(len(embeddings))]
-    # Insert embeddings into Milvus Lite
-    milvus_client.insert(
-        "text_embeddings",
-        [{"id": i, "embedding": embeddings[i]} for i in range(len(embeddings))]
-    )
-
-# Function to search embeddings in Milvus Lite
-def search_embeddings(query_text, top_k=5):
-    response = client.embeddings.create(
-        model="text-embedding-ada-002",
-        input=query_text
-    )
-    query_embedding = response['data'][0]['embedding']
-    search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
-    results = milvus_client.search(
-        collection_name="text_embeddings",
-        data=[query_embedding],
-        anns_field="embedding",
-        params=search_params,
-        limit=top_k
-    )
-    return results
-
-# Streamlit UI components
+# Store data and allow querying through a chatbot interface
 st.title("Interactive Chatbot for Data Analysis")
 
 # Multi-line text input for URLs
@@ -315,18 +289,22 @@ if st.button("Submit"):
         all_texts.extend(file_texts)
         data_frames.update(file_data_frames)
 
+    # Preprocess texts and store embeddings
+    preprocessed_texts = [preprocess_text(text) for text in all_texts]
+    store_embeddings(preprocessed_texts)
+
     # Store all collected texts and data frames in session state
     st.session_state['all_texts'] = all_texts
     st.session_state['data_frames'] = data_frames
 
-    # Notify user that data has been scraped and stored
-    st.success("Data has been successfully scraped and stored. You can now query the data.")
+    # Notify user that data has been scraped, preprocessed, and stored
+    st.success("Data has been successfully scraped, preprocessed, and stored in Milvus. You can now query the data.")
 
-# Chatbot interface
+# Chatbot interface for querying data
 if 'all_texts' in st.session_state:
     st.write("### Chat with the Data")
     user_query = st.text_input("Ask a question about the data or request a graph:")
-    
+
     if st.button("Submit Query"):
         if user_query.lower().startswith("graph"):
             # Generate a graph based on keywords or data patterns
@@ -357,7 +335,7 @@ if 'all_texts' in st.session_state:
             text_chunks = list(chunk_text(combined_text))
             responses = []
             for chunk in text_chunks:
-                response = client.chat.completions.create(
+                response = openai_client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
                         {"role": "system", "content": "You are an intelligent assistant that provides concise and accurate answers to the user's questions based on the data provided."},
@@ -373,14 +351,4 @@ if 'all_texts' in st.session_state:
             full_response = " ".join(responses)
             st.write(full_response)
 
-# Milvus Integration: Store and Query Embeddings
-if st.button("Store Embeddings"):
-    store_embeddings(st.session_state['all_texts'])
-    st.success("Embeddings have been stored in Milvus.")
-
-if st.button("Search Embeddings"):
-    query_text = st.text_input("Enter query text to search embeddings:")
-    if query_text:
-        search_results = search_embeddings(query_text)
-        st.write(search_results)
 
