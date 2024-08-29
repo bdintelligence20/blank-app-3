@@ -13,7 +13,7 @@ import PyPDF2
 import docx
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pymilvus import MilvusClient, CollectionSchema, FieldSchema, DataType
+from pymilvus import MilvusClient, DataType
 import numpy as np
 
 # Download necessary NLTK data
@@ -72,13 +72,15 @@ def store_embeddings(texts):
 # Function to create collection if it doesn't exist
 def create_collection():
     if "text_embeddings" not in client.list_collections():
-        fields = [
-            FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-            FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
-            FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536)  # Adjust dimension as per your embeddings
-        ]
-        schema = CollectionSchema(fields, description="Text embeddings collection")
-        client.create_collection("text_embeddings", schema)
+        client.create_collection(
+            collection_name="text_embeddings",
+            dimension=1536,  # Adjust dimension as per your embeddings
+            primary_field_name="id",
+            vector_field_name="embedding",
+            id_type=DataType.INT64,
+            metric_type="L2",
+            auto_id=True
+        )
 
 # Function to extract text from URLs
 def extract_text_from_urls(urls):
