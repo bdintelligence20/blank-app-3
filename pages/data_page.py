@@ -34,27 +34,6 @@ openai_client = OpenAI(api_key=api_key)
 # Connect to Milvus Lite
 client = MilvusClient("./milvus_demo.db")
 
-# Function to check and create collection if it doesn't exist
-def check_and_create_collection():
-    if "text_embeddings" not in client.list_collections():
-        fields = [
-            FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-            FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
-            FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536)  # Adjust dimension as per your embeddings
-        ]
-        schema = CollectionSchema(fields, description="Text embeddings collection")
-        client.create_collection(collection_name="text_embeddings", schema=schema)
-        create_index()
-
-# Function to create index for efficient querying
-def create_index():
-    index_params = {
-        "metric_type": "L2",
-        "index_type": "IVF_FLAT",
-        "params": {"nlist": 1024}
-    }
-    client.create_index("text_embeddings", "embedding", index_params)
-
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
     doc = nlp(text.lower())
@@ -77,7 +56,6 @@ def get_embedding(text, model="text-embedding-ada-002"):
 
 # Function to store embeddings in Milvus Lite
 def store_embeddings(texts):
-    check_and_create_collection()  # Ensure collection exists before storing embeddings
     data = []
     for text in texts:
         preprocessed_text = preprocess_text(text)
@@ -91,6 +69,26 @@ def store_embeddings(texts):
     if data:
         client.insert("text_embeddings", data)
         client.flush(["text_embeddings"])  # Ensure data is written to disk
+
+# Function to create collection if it doesn't exist
+def create_collection():
+    if "text_embeddings" not in client.list_collections():
+        fields = [
+            FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+            FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
+            FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536)  # Adjust dimension as per your embeddings
+        ]
+        schema = CollectionSchema(fields, description="Text embeddings collection")
+        client.create_collection(collection_name="text_embeddings", schema=schema)
+
+# Function to create index for efficient querying
+def create_index():
+    index_params = {
+        "metric_type": "L2",
+        "index_type": "IVF_FLAT",
+        "params": {"nlist": 1024}
+    }
+    client.create_index("text_embeddings", "embedding", index_params)
 
 # Function to extract text from URLs
 def extract_text_from_urls(urls):
@@ -275,20 +273,28 @@ if st.button("Submit"):
     if urls:
         url_texts = extract_text_from_urls(urls)
         all_texts.extend(url_texts)
-        # Store URLs in Milvus
-        store_embeddings(url_texts)
 
     # Process uploaded files
     if uploaded_files:
         file_texts, file_data_frames = process_uploaded_files(uploaded_files)
         all_texts.extend(file_texts)
         data_frames.update(file_data_frames)
-        # Store file names and texts in Milvus
-        store_embeddings(file_texts)
 
     # Store all collected texts and data frames in session state
     st.session_state['all_texts'] = all_texts
     st.session_state['data_frames'] = data_frames
 
-    # Notify user that data has been scraped and stored
-    st.success("Data has been successfully scraped, stored, and embeddings have been stored in Milvus.")
+    # Notify user that data has been scraped
+    st.success("Data has been successfully scraped.")
+
+    # Create collection if it doesn't exist
+    create_collection()
+
+    # Store texts in Milvus
+    store_embeddings(all_texts)
+
+    # Create an index for the collection
+    create_index()
+
+    # Notify user that data has been stored and indexed
+    st.success("Data has been stored and indexed in Milvus.")
