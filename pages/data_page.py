@@ -43,7 +43,7 @@ def check_and_create_collection():
             FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536)  # Adjust dimension as per your embeddings
         ]
         schema = CollectionSchema(fields, description="Text embeddings collection")
-        client.create_collection("text_embeddings", schema)
+        client.create_collection(collection_name="text_embeddings", schema=schema)
         create_index()
 
 # Function to create index for efficient querying
