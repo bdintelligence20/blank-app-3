@@ -66,14 +66,18 @@ def search_embeddings(query_text, top_k=5):
     query_embedding = get_embedding(preprocessed_query)
     
     search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
-    results = client.search(
-        collection_name="text_embeddings",
-        data=[query_embedding],
-        anns_field="vector",
-        params=search_params,
-        limit=top_k,
-        output_fields=["vector"]
-    )
+    try:
+        results = client.search(
+            collection_name="text_embeddings",
+            data=[query_embedding],
+            anns_field="vector",
+            params=search_params,
+            limit=top_k,
+            output_fields=["vector"]
+        )
+    except Exception as e:
+        st.error(f"Failed to query collection: {e}")
+        return []
     return results
 
 # Function to summarize long text using GPT-4
@@ -146,24 +150,24 @@ st.title("Interactive Chatbot for Data Analysis")
 # Define standard analysis chips
 standard_chips = ["Sentiment Analysis", "K-means Clustering", "Advanced Graph"]
 
-# Initialize session state for data chips
-if 'data_chips' not in st.session_state:
-    st.session_state['data_chips'] = []
-
 # Load data chips from Milvus
 def load_data_chips():
-    results = client.query(
-        collection_name="text_embeddings",
-        expr="",
-        output_fields=["id"]
-    )
-    return [result["id"] for result in results]
+    try:
+        results = client.query(
+            collection_name="text_embeddings",
+            expr="",
+            output_fields=["id"]
+        )
+        return [result["id"] for result in results]
+    except Exception as e:
+        st.error(f"Failed to load data chips: {e}")
+        return []
 
 # Update session state with data chips from Milvus
-st.session_state['data_chips'] = load_data_chips()
+data_chips = load_data_chips()
 
 # Combine data chips and standard chips
-all_chips = st.session_state['data_chips'] + standard_chips
+all_chips = data_chips + standard_chips
 
 # Drag-and-drop chips interface
 selected_chips = st_tags(
@@ -181,7 +185,7 @@ if 'all_texts' in st.session_state:
     user_query = st.text_input("Ask a question about the data or request a graph:")
     
     if st.button("Submit Query"):
-        if any(chip in selected_chips for chip in st.session_state['data_chips']):
+        if any(chip in selected_chips for chip in data_chips):
             st.write("Data has been uploaded.")
         
         if "Sentiment Analysis" in selected_chips:

@@ -271,14 +271,18 @@ def search_embeddings(query_text, top_k=5):
     query_embedding = get_embedding(preprocessed_query)
     
     search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
-    results = client.search(
-        collection_name="text_embeddings",
-        data=[query_embedding],
-        anns_field="vector",
-        params=search_params,
-        limit=top_k,
-        output_fields=["vector"]
-    )
+    try:
+        results = client.search(
+            collection_name="text_embeddings",
+            data=[query_embedding],
+            anns_field="vector",
+            params=search_params,
+            limit=top_k,
+            output_fields=["vector"]
+        )
+    except Exception as e:
+        st.error(f"Failed to query collection: {e}")
+        return []
     return results
 
 # Function to summarize long text using GPT-4
@@ -316,21 +320,20 @@ if st.button("Submit"):
     if urls:
         url_texts = extract_text_from_urls(urls)
         all_texts.extend(url_texts)
-        st.session_state['data_chips'].extend(urls)  # Add URLs to data chips
+        # Store URLs in Milvus
+        store_embeddings(url_texts)
 
     # Process uploaded files
     if uploaded_files:
         file_texts, file_data_frames = process_uploaded_files(uploaded_files)
         all_texts.extend(file_texts)
         data_frames.update(file_data_frames)
-        st.session_state['data_chips'].extend([file.name for file in uploaded_files])  # Add file names to data chips
+        # Store file names and texts in Milvus
+        store_embeddings(file_texts)
 
     # Store all collected texts and data frames in session state
     st.session_state['all_texts'] = all_texts
     st.session_state['data_frames'] = data_frames
-
-    # Store embeddings in Milvus
-    store_embeddings(all_texts)
 
     # Notify user that data has been scraped and stored
     st.success("Data has been successfully scraped, stored, and embeddings have been stored in Milvus.")
