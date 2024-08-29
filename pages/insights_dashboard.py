@@ -74,7 +74,7 @@ def summarize_text(text):
             {"role": "user", "content": f"Summarize the following text in a concise manner: {text}"}
         ],
         temperature=0.5,
-        max_tokens=150,
+        max_tokens=4000,
         top_p=1,
         frequency_penalty=0,
         presence_penalty=0
