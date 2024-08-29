@@ -15,7 +15,7 @@ import PyPDF2
 import docx
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pymilvus import MilvusClient
+from pymilvus import MilvusClient, DataType, FieldSchema, CollectionSchema, Collection
 import numpy as np
 
 # Download necessary NLTK data
@@ -34,18 +34,20 @@ api_key = st.secrets["openai"]["api_key"]
 client = OpenAI(api_key=api_key)
 
 # Connect to Milvus Lite
-client = MilvusClient("./milvus_demo.db")
+milvus_client = MilvusClient("./milvus_demo.db")
+
+# Define collection schema
+fields = [
+    FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+    FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536),
+]
+schema = CollectionSchema(fields, description="Collection for storing text embeddings")
 
 # Create collection if it doesn't exist
-if "text_embeddings" not in client.list_collections():
-    client.create_collection(
+if "text_embeddings" not in milvus_client.list_collections():
+    milvus_client.create_collection(
         collection_name="text_embeddings",
-        dimension=1536,  # Adjust this dimension as per your embeddings
-        primary_field_name="id",
-        id_type="INT64",
-        vector_field_name="embedding",
-        metric_type="L2",
-        auto_id=True
+        schema=schema
     )
 
 # Function to preprocess text data using spaCy
@@ -265,7 +267,10 @@ def store_embeddings(texts):
         embeddings.append(response['data'][0]['embedding'])
     ids = [i for i in range(len(embeddings))]
     # Insert embeddings into Milvus Lite
-    client.insert("text_embeddings", [{"id": i, "embedding": embeddings[i]} for i in range(len(embeddings))])
+    milvus_client.insert(
+        "text_embeddings",
+        [{"id": i, "embedding": embeddings[i]} for i in range(len(embeddings))]
+    )
 
 # Function to search embeddings in Milvus Lite
 def search_embeddings(query_text, top_k=5):
@@ -275,7 +280,7 @@ def search_embeddings(query_text, top_k=5):
     )
     query_embedding = response['data'][0]['embedding']
     search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
-    results = client.search(
+    results = milvus_client.search(
         collection_name="text_embeddings",
         data=[query_embedding],
         anns_field="embedding",
@@ -284,7 +289,7 @@ def search_embeddings(query_text, top_k=5):
     )
     return results
 
-# Store data and allow querying through a chatbot interface
+# Streamlit UI components
 st.title("Interactive Chatbot for Data Analysis")
 
 # Multi-line text input for URLs
