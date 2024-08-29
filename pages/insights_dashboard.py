@@ -62,7 +62,7 @@ def search_embeddings(query_text, top_k=5):
             collection_name="text_embeddings",
             data=[query_embedding],
             anns_field="embedding",
-            search_params=search_params,  # Corrected parameter name
+            param=search_params,  # Corrected parameter name
             limit=top_k,
             output_fields=["content"]
         )
@@ -80,7 +80,7 @@ def summarize_text(text):
             {"role": "user", "content": f"Summarize the following text in a concise manner: {text}"}
         ],
         temperature=0.5,
-        max_tokens=1050,
+        max_tokens=150,
         top_p=1,
         frequency_penalty=0,
         presence_penalty=0
@@ -145,7 +145,7 @@ standard_chips = ["Sentiment Analysis", "K-means Clustering", "Advanced Graph"]
 selected_chips = st_tags(
     label='Drag and drop chips into the query field:',
     text='Press enter to add more',
-    value=standard_chips,
+    value=[],
     suggestions=standard_chips,
     maxtags=10,
     key='1'
@@ -160,39 +160,48 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# Provide a dropdown to select a document
+if 'document_metadata' in st.session_state:
+    document_options = [f"{doc['source']} ({doc['type']})" for doc in st.session_state['document_metadata']]
+    selected_document = st.selectbox("Select a document to query:", document_options)
+else:
+    st.error("No documents available. Please upload data on the data page.")
+
 # Accept user input
-if prompt := st.chat_input("Ask a question about the data or request a graph:"):
+if prompt := st.chat_input("Ask a question about the selected document:"):
     # Display user message in chat message container
     with st.chat_message("user"):
         st.markdown(prompt)
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Process the query based on selected chips
-    if "Sentiment Analysis" in selected_chips:
-        st.write("Performing sentiment analysis on the data...")
-        sentiments = perform_sentiment_analysis(st.session_state['all_texts'])
-        st.write(sentiments)
-    
-    if "K-means Clustering" in selected_chips:
-        st.write("Performing K-means clustering on the data...")
-        clusters = perform_kmeans_clustering(st.session_state['all_texts'])
-        st.write(clusters)
-    
-    if "Advanced Graph" in selected_chips:
-        st.write("Generating advanced graph based on the data...")
-        data = pd.DataFrame({
-            'x': range(10),
-            'y': range(10),
-            'label': ['A']*5 + ['B']*5
-        })
-        generate_advanced_graph(data, graph_type="scatter")
-    
-    # Ensure 'all_texts' is in session state
-    if 'all_texts' in st.session_state:
+    # Process the query based on selected document
+    if 'all_texts' in st.session_state and selected_document:
+        selected_index = document_options.index(selected_document)
+        selected_text = st.session_state['all_texts'][selected_index]
+
+        # Process the query based on selected chips
+        if "Sentiment Analysis" in selected_chips:
+            st.write("Performing sentiment analysis on the data...")
+            sentiments = perform_sentiment_analysis([selected_text])
+            st.write(sentiments)
+        
+        if "K-means Clustering" in selected_chips:
+            st.write("Performing K-means clustering on the data...")
+            clusters = perform_kmeans_clustering([selected_text])
+            st.write(clusters)
+        
+        if "Advanced Graph" in selected_chips:
+            st.write("Generating advanced graph based on the data...")
+            data = pd.DataFrame({
+                'x': range(10),
+                'y': range(10),
+                'label': ['A']*5 + ['B']*5
+            })
+            generate_advanced_graph(data, graph_type="scatter")
+        
         # Query the data using GPT-4
-        combined_text = ' '.join(st.session_state['all_texts'])
-        text_chunks = list(chunk_text(combined_text))
+        text_chunks = list(chunk_text(selected_text))
         responses = []
         for chunk in text_chunks:
             response = generate_relevant_response(chunk, prompt)

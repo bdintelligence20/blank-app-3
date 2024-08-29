@@ -244,21 +244,25 @@ uploaded_files = st.file_uploader("Upload multiple files", type=["xlsx", "csv", 
 if st.button("Submit"):
     all_texts = []
     data_frames = {}
+    document_metadata = []
 
     # Extract text from URLs
     if urls:
         url_texts = extract_text_from_urls(urls)
         all_texts.extend(url_texts)
+        document_metadata.extend([{"source": url, "type": "url"} for url in urls])
 
     # Process uploaded files
     if uploaded_files:
         file_texts, file_data_frames = process_uploaded_files(uploaded_files)
         all_texts.extend(file_texts)
         data_frames.update(file_data_frames)
+        document_metadata.extend([{"source": file.name, "type": file.type} for file in uploaded_files])
 
-    # Store all collected texts and data frames in session state
+    # Store all collected texts, data frames, and metadata in session state
     st.session_state['all_texts'] = all_texts
     st.session_state['data_frames'] = data_frames
+    st.session_state['document_metadata'] = document_metadata
 
     # Notify user that data has been scraped
     st.success("Data has been successfully scraped.")
