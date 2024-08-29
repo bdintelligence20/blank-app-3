@@ -1,7 +1,8 @@
 import os
 import streamlit as st
 import pandas as pd
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.cluster import KMeans
 from openai import OpenAI
 import spacy
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
@@ -14,7 +15,7 @@ import PyPDF2
 import docx
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pymilvus import MilvusClient, DataType, FieldSchema, CollectionSchema, Collection
+from pymilvus import MilvusClient
 import numpy as np
 
 # Download necessary NLTK data
@@ -35,34 +36,12 @@ openai_client = OpenAI(api_key=api_key)
 # Connect to Milvus Lite
 client = MilvusClient("./milvus_demo.db")
 
-# Define Milvus collection schema
-fields = [
-    FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=False),
-    FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536)
-]
-schema = CollectionSchema(fields, "Collection for storing text embeddings")
-
-# Create or load Milvus collection
+# Create collection if it doesn't exist
 if "text_embeddings" not in client.list_collections():
-    collection = Collection("text_embeddings", schema)
-else:
-    collection = Collection("text_embeddings")
-
-# Function to store embeddings in Milvus Lite
-def store_embeddings(texts):
-    embeddings = []
-    for text in texts:
-        response = openai_client.embeddings.create(
-            model="text-embedding-ada-002",
-            input=text
-        )
-        embedding = response.data[0].embedding  # Corrected to access data correctly
-        embeddings.append(embedding)
-    
-    ids = list(range(len(embeddings)))
-    
-    # Insert embeddings into Milvus Lite
-    collection.insert([{"id": i, "embedding": embeddings[i]} for i in range(len(embeddings))])
+    client.create_collection(
+        collection_name="text_embeddings",
+        dimension=1536  # Adjust this dimension as per your embeddings
+    )
 
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
@@ -242,8 +221,15 @@ def process_uploaded_files(files):
 def extract_text_from_urls(urls):
     text_data = []
     for url in urls:
-        page_content = scrape_page(url)
-        text_data.append(page_content)
+        try:
+            response = requests.get(url, verify=False)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
+            texts = soup.find_all(text=True)
+            visible_texts = filter(tag_visible, texts)
+            text_data.append(" ".join(t.strip() for t in visible_texts))
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error fetching the URL: {e}")
     return text_data
 
 # Function to extract keywords from text data
@@ -255,13 +241,38 @@ def extract_keywords(texts, n=10):
     keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
     return keyword_counts.head(n)
 
-# Function to query dataframes for specific information
-def query_data(df, query):
-    try:
-        result = df.query(query)
-        return result.to_string()
-    except Exception as e:
-        return f"Error querying data: {str(e)}"
+# Function to store embeddings in Milvus Lite
+def store_embeddings(texts):
+    embeddings = []
+    for text in texts:
+        response = openai_client.embeddings.create(
+            model="text-embedding-ada-002",
+            input=text
+        )
+        embeddings.append(response['data'][0]['embedding'])
+    data = [{"id": i, "vector": embeddings[i]} for i in range(len(embeddings))]
+    client.insert(
+        collection_name="text_embeddings",
+        data=data
+    )
+
+# Function to search embeddings in Milvus Lite
+def search_embeddings(query_text, top_k=5):
+    response = openai_client.embeddings.create(
+        model="text-embedding-ada-002",
+        input=query_text
+    )
+    query_embedding = response['data'][0]['embedding']
+    search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
+    results = client.search(
+        collection_name="text_embeddings",
+        data=[query_embedding],
+        anns_field="vector",
+        params=search_params,
+        limit=top_k,
+        output_fields=["vector"]
+    )
+    return results
 
 # Store data and allow querying through a chatbot interface
 st.title("Interactive Chatbot for Data Analysis")
@@ -289,22 +300,21 @@ if st.button("Submit"):
         all_texts.extend(file_texts)
         data_frames.update(file_data_frames)
 
-    # Preprocess texts and store embeddings
-    preprocessed_texts = [preprocess_text(text) for text in all_texts]
-    store_embeddings(preprocessed_texts)
-
     # Store all collected texts and data frames in session state
     st.session_state['all_texts'] = all_texts
     st.session_state['data_frames'] = data_frames
 
-    # Notify user that data has been scraped, preprocessed, and stored
-    st.success("Data has been successfully scraped, preprocessed, and stored in Milvus. You can now query the data.")
+    # Store embeddings in Milvus
+    store_embeddings(all_texts)
 
-# Chatbot interface for querying data
+    # Notify user that data has been scraped and stored
+    st.success("Data has been successfully scraped, stored, and embeddings have been stored in Milvus.")
+
+# Chatbot interface for querying embeddings
 if 'all_texts' in st.session_state:
     st.write("### Chat with the Data")
     user_query = st.text_input("Ask a question about the data or request a graph:")
-
+    
     if st.button("Submit Query"):
         if user_query.lower().startswith("graph"):
             # Generate a graph based on keywords or data patterns
@@ -314,21 +324,6 @@ if 'all_texts' in st.session_state:
             sns.barplot(x='Keyword', y='Count', data=keywords, ax=ax)
             plt.xticks(rotation=45)
             st.pyplot(fig)
-        elif user_query.lower().startswith("query"):
-            # Extract the specific query from the user's input
-            query_parts = user_query.split(':')
-            if len(query_parts) > 1:
-                query = query_parts[1].strip()
-                # Check for specific data frame query
-                for file_name, df in st.session_state['data_frames'].items():
-                    if query.lower() in df.columns.str.lower().tolist():
-                        result = query_data(df, query)
-                        st.write(result)
-                        break
-                else:
-                    st.write("No matching column found in uploaded files.")
-            else:
-                st.write("Please provide a specific query after 'query:'")
         else:
             # Query the data using GPT-4
             combined_text = ' '.join(st.session_state['all_texts'])
@@ -351,4 +346,10 @@ if 'all_texts' in st.session_state:
             full_response = " ".join(responses)
             st.write(full_response)
 
+        # Embedding search query
+        search_results = search_embeddings(user_query)
+        st.write("Search results for embeddings:")
+        st.write(search_results)
+
+# End of script
 
