@@ -227,7 +227,7 @@ def extract_text_from_urls(urls):
             texts = soup.find_all(text=True)
             visible_texts = filter(tag_visible, texts)
             text_data.append(" ".join(t.strip() for t in visible_texts))
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.Request.exceptions.RequestException as e:
             st.error(f"Error fetching the URL: {e}")
     return text_data
 
@@ -246,14 +246,15 @@ def get_embedding(text, model="text-embedding-ada-002"):
     response = openai_client.embeddings.create(input=[text], model=model)
     return response.data[0].embedding
 
+# Function to store embeddings in Milvus Lite
 def store_embeddings(texts):
     embeddings = []
     for text in texts:
         embedding = get_embedding(text)
         embeddings.append(embedding)
-
+    
     data = [{"id": i, "vector": embeddings[i]} for i in range(len(embeddings))]
-
+    
     client.insert(
         collection_name="text_embeddings",
         data=data
@@ -351,3 +352,4 @@ if 'all_texts' in st.session_state:
         st.write(search_results)
 
 # End of script
+
