@@ -68,7 +68,7 @@ def store_embeddings(texts):
 
     if data:
         client.insert("text_embeddings", data)
-        client.flush(["text_embeddings"])  # Ensure data is written to disk
+        client.load("text_embeddings")  # Ensure data is loaded into memory
 
 # Function to create collection if it doesn't exist
 def create_collection():
@@ -79,7 +79,7 @@ def create_collection():
             FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536)  # Adjust dimension as per your embeddings
         ]
         schema = CollectionSchema(fields, description="Text embeddings collection")
-        client.create_collection(collection_name="text_embeddings", schema=schema)
+        client.create_collection("text_embeddings", schema)
 
 # Function to create index for efficient querying
 def create_index():
