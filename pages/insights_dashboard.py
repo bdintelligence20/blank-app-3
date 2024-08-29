@@ -51,7 +51,7 @@ def get_embedding(text, model="text-embedding-ada-002"):
     return response.data[0].embedding
 
 # Function to search embeddings in Milvus Lite
-def search_embeddings(query_text, top_k=5):
+def search_embeddings(query_text):
     # Preprocess query text
     preprocessed_query = preprocess_text(query_text)
     query_embedding = get_embedding(preprocessed_query)
@@ -63,29 +63,12 @@ def search_embeddings(query_text, top_k=5):
             data=[query_embedding],
             anns_field="embedding",
             search_params=search_params,  # Corrected parameter name
-            limit=top_k,
             output_fields=["content"]
         )
     except Exception as e:
         st.error(f"Failed to query collection: {e}")
         return []
     return results
-
-# Function to summarize long text using GPT-4
-def summarize_text(text):
-    response = openai_client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are an expert summarizer."},
-            {"role": "user", "content": f"Summarize the following text in a concise manner: {text}"}
-        ],
-        temperature=0.5,
-        max_tokens=150,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0
-    )
-    return response.choices[0].message.content.strip()
 
 # Function to generate a comprehensive and relevant response using GPT-4
 def generate_relevant_response(data, query):
@@ -208,14 +191,11 @@ if prompt := st.chat_input("Ask a question about the selected document:"):
             responses.append(response)
         full_response = " ".join(responses)
         
-        # Summarize the full response
-        summarized_response = summarize_text(full_response)
-        
         # Display assistant response in chat message container
         with st.chat_message("assistant"):
-            st.markdown(summarized_response)
+            st.markdown(full_response)
         # Add assistant response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": summarized_response})
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
 
         # Embedding search query
         search_results = search_embeddings(prompt)
