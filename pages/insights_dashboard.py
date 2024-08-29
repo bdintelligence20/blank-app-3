@@ -81,6 +81,22 @@ def summarize_text(text):
     )
     return response.choices[0].message.content.strip()
 
+# Function to generate a comprehensive and relevant response using GPT-4
+def generate_relevant_response(data, query):
+    response = openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are an intelligent assistant that provides concise and accurate answers to the user's questions based on the data provided."},
+            {"role": "user", "content": f"Based on the following data: {data}. {query}"}
+        ],
+        temperature=0.3,  # Lower temperature for more concise responses
+        max_tokens=4000,  # Allow more tokens for comprehensive answers
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0
+    )
+    return response.choices[0].message.content.strip()
+
 # Store data and allow querying through a chatbot interface
 st.title("Interactive Chatbot for Data Analysis")
 
@@ -104,19 +120,8 @@ if 'all_texts' in st.session_state:
             text_chunks = list(chunk_text(combined_text))
             responses = []
             for chunk in text_chunks:
-                response = openai_client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[
-                        {"role": "system", "content": "You are an intelligent assistant that provides concise and accurate answers to the user's questions based on the data provided."},
-                        {"role": "user", "content": f"Based on the following data: {chunk}. {user_query}"}
-                    ],
-                    temperature=0.3,  # Lower temperature for more concise responses
-                    max_tokens=500,
-                    top_p=1,
-                    frequency_penalty=0,
-                    presence_penalty=0
-                )
-                responses.append(response.choices[0].message.content.strip())
+                response = generate_relevant_response(chunk, user_query)
+                responses.append(response)
             full_response = " ".join(responses)
             
             # Summarize the full response
