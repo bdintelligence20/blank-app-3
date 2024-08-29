@@ -74,7 +74,7 @@ def summarize_text(text):
             {"role": "user", "content": f"Summarize the following text in a concise manner: {text}"}
         ],
         temperature=0.5,
-        max_tokens=150,
+        max_tokens=1050,
         top_p=1,
         frequency_penalty=0,
         presence_penalty=0
@@ -84,15 +84,15 @@ def summarize_text(text):
 # Function to generate a comprehensive and relevant response using GPT-4
 def generate_relevant_response(data, query):
     response = openai_client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are an intelligent assistant that provides concise and accurate answers to the user's questions based on the data provided."},
-            {"role": "user", "content": f"Based on the following data: {data}. {query}"}
+            {"role": "user", "content": f"Based on the following data: {data}. {query}. Please provide a detailed and comprehensive response."}
         ],
-        temperature=0.3,  # Lower temperature for more concise responses
-        max_tokens=4000,  # Allow more tokens for comprehensive answers
+        temperature=0.5,  # Lower temperature for more concise responses
+        max_tokens=16383,  # Allow more tokens for comprehensive answers
         top_p=1,
-        frequency_penalty=0,
+        frequency_penalty=0.30,
         presence_penalty=0
     )
     return response.choices[0].message.content.strip()
@@ -129,4 +129,4 @@ if 'all_texts' in st.session_state:
             st.write(summarized_response)
         # Embedding search query
         search_results = search_embeddings(user_query)
-        
+
