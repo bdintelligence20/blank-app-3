@@ -240,33 +240,28 @@ def extract_keywords(texts, n=10):
     keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
     return keyword_counts.head(n)
 
-# Function to store embeddings in Milvus Lite
+# Function to get embeddings using OpenAI and store in Milvus Lite
+def get_embedding(text, model="text-embedding-ada-002"):
+    text = text.replace("\n", " ")
+    response = openai_client.embeddings.create(input=[text], model=model)
+    return response.data[0].embedding
+
 def store_embeddings(texts):
     embeddings = []
     for text in texts:
-        response = openai_client.embeddings.create(
-            model="text-embedding-ada-002",
-            input=text
-        )
-        # Correctly access the response data
-        embedding = response['choices'][0]['embedding']
+        embedding = get_embedding(text)
         embeddings.append(embedding)
 
     data = [{"id": i, "vector": embeddings[i]} for i in range(len(embeddings))]
-    
+
     client.insert(
         collection_name="text_embeddings",
         data=data
     )
 
-
 # Function to search embeddings in Milvus Lite
 def search_embeddings(query_text, top_k=5):
-    response = openai_client.embeddings.create(
-        model="text-embedding-ada-002",
-        input=query_text
-    )
-    query_embedding = response['data'][0]['embedding']
+    query_embedding = get_embedding(query_text)
     search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
     results = client.search(
         collection_name="text_embeddings",
@@ -356,4 +351,3 @@ if 'all_texts' in st.session_state:
         st.write(search_results)
 
 # End of script
-
