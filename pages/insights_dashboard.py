@@ -168,7 +168,7 @@ def load_data_chips():
 data_chips = load_data_chips()
 
 # Combine data chips and standard chips
-all_chips = data_chips + standard_chips
+all_chips = standard_chips + data_chips
 
 # Drag-and-drop chips interface
 selected_chips = st_tags(
