@@ -248,12 +248,17 @@ def store_embeddings(texts):
             model="text-embedding-ada-002",
             input=text
         )
-        embeddings.append(response['data'][0]['embedding'])
+        # Correctly access the response data
+        embedding = response['choices'][0]['embedding']
+        embeddings.append(embedding)
+
     data = [{"id": i, "vector": embeddings[i]} for i in range(len(embeddings))]
+    
     client.insert(
         collection_name="text_embeddings",
         data=data
     )
+
 
 # Function to search embeddings in Milvus Lite
 def search_embeddings(query_text, top_k=5):
