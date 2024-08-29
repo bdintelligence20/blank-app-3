@@ -80,15 +80,6 @@ def create_collection():
         schema = CollectionSchema(fields, description="Text embeddings collection")
         client.create_collection("text_embeddings", schema)
 
-# Function to create index for efficient querying
-def create_index():
-    index_params = {
-        "metric_type": "L2",
-        "index_type": "IVF_FLAT",
-        "params": {"nlist": 1024}
-    }
-    client.create_index("text_embeddings", "embedding", index_params)
-
 # Function to extract text from URLs
 def extract_text_from_urls(urls):
     text_data = []
@@ -292,8 +283,5 @@ if st.button("Submit"):
     # Store texts in Milvus
     store_embeddings(all_texts)
 
-    # Create an index for the collection
-    create_index()
-
-    # Notify user that data has been stored and indexed
-    st.success("Data has been stored and indexed in Milvus.")
+    # Notify user that data has been stored
+    st.success("Data has been stored in Milvus.")
