@@ -253,15 +253,16 @@ def store_embeddings(texts):
     for text in texts:
         # Ensure the text is preprocessed before embedding
         preprocessed_text = preprocess_text(text)
-        embedding = get_embedding(preprocessed_text)
-        embeddings.append(embedding)
+        if preprocessed_text:  # Check if preprocessed text is not empty
+            embedding = get_embedding(preprocessed_text)
+            embeddings.append(embedding)
 
-    data = [{"id": i, "vector": embeddings[i]} for i in range(len(embeddings))]
-    
-    client.insert(
-        collection_name="text_embeddings",
-        data=data
-    )
+    if embeddings:  # Ensure there are embeddings to insert
+        data = [{"id": i, "vector": embeddings[i]} for i in range(len(embeddings))]
+        client.insert(
+            collection_name="text_embeddings",
+            data=data
+        )
 
 # Function to search embeddings in Milvus Lite
 def search_embeddings(query_text, top_k=5):
