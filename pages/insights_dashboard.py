@@ -70,10 +70,10 @@ def search_embeddings(query_text, top_k=5):
         results = client.search(
             collection_name="text_embeddings",
             data=[query_embedding],
-            anns_field="vector",
-            param=search_params,  # Corrected parameter name
+            anns_field="embedding",
+            param=search_params,
             limit=top_k,
-            output_fields=["vector"]
+            output_fields=["content"]
         )
     except Exception as e:
         st.error(f"Failed to query collection: {e}")
