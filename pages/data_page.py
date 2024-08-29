@@ -226,8 +226,9 @@ def extract_text_from_urls(urls):
             soup = BeautifulSoup(response.content, 'html.parser')
             texts = soup.find_all(text=True)
             visible_texts = filter(tag_visible, texts)
-            text_data.append(" ".join(t.strip() for t in visible_texts))
-        except requests.exceptions.Request.exceptions.RequestException as e:
+            text_data.append(" ".join(t.strip()
+    for t in visible_texts))
+        except requests.exceptions.RequestException as e:
             st.error(f"Error fetching the URL: {e}")
     return text_data
 
@@ -250,9 +251,11 @@ def get_embedding(text, model="text-embedding-ada-002"):
 def store_embeddings(texts):
     embeddings = []
     for text in texts:
-        embedding = get_embedding(text)
+        # Ensure the text is preprocessed before embedding
+        preprocessed_text = preprocess_text(text)
+        embedding = get_embedding(preprocessed_text)
         embeddings.append(embedding)
-    
+
     data = [{"id": i, "vector": embeddings[i]} for i in range(len(embeddings))]
     
     client.insert(
@@ -262,7 +265,10 @@ def store_embeddings(texts):
 
 # Function to search embeddings in Milvus Lite
 def search_embeddings(query_text, top_k=5):
-    query_embedding = get_embedding(query_text)
+    # Preprocess query text
+    preprocessed_query = preprocess_text(query_text)
+    query_embedding = get_embedding(preprocessed_query)
+    
     search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
     results = client.search(
         collection_name="text_embeddings",
@@ -352,4 +358,3 @@ if 'all_texts' in st.session_state:
         st.write(search_results)
 
 # End of script
-
