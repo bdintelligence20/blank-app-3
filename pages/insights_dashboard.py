@@ -62,7 +62,7 @@ def search_embeddings(query_text, top_k=5):
             collection_name="text_embeddings",
             data=[query_embedding],
             anns_field="embedding",
-            param=search_params,  # Corrected parameter name
+            search_params=search_params,  # Corrected parameter name
             limit=top_k,
             output_fields=["content"]
         )
