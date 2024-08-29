@@ -68,7 +68,6 @@ def store_embeddings(texts):
 
     if data:
         client.insert("text_embeddings", data)
-        client.load("text_embeddings")  # Ensure data is loaded into memory
 
 # Function to create collection if it doesn't exist
 def create_collection():
