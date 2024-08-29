@@ -1,21 +1,4 @@
-import os
-import streamlit as st
-import pandas as pd
-from sklearn.feature_extraction.text import CountVectorizer
-from openai import OpenAI
-import spacy
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
-import nltk
-import requests
-from bs4 import BeautifulSoup
-from bs4.element import Comment
-import time
-import PyPDF2
-import docx
-import matplotlib.pyplot as plt
-import seaborn as sns
-from pymilvus import MilvusClient
-import numpy as np
+
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -202,7 +185,7 @@ def process_uploaded_files(files):
     text_data = []
     data_frames = {}
     for file in files:
-        if file.type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or file.type == 'application/vnd.ms-excel':
+        if file.type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']:
             df = pd.read_excel(file)
             text_data.extend(df.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
             data_frames[file.name] = df
@@ -226,8 +209,7 @@ def extract_text_from_urls(urls):
             soup = BeautifulSoup(response.content, 'html.parser')
             texts = soup.find_all(text=True)
             visible_texts = filter(tag_visible, texts)
-            text_data.append(" ".join(t.strip()
-    for t in visible_texts))
+            text_data.append(" ".join(t.strip() for t in visible_texts))
         except requests.exceptions.RequestException as e:
             st.error(f"Error fetching the URL: {e}")
     return text_data
@@ -244,6 +226,8 @@ def extract_keywords(texts, n=10):
 # Function to get embeddings using OpenAI and store in Milvus Lite
 def get_embedding(text, model="text-embedding-ada-002"):
     text = text.replace("\n", " ")
+    if not text.strip():  # Ensure the text is not empty
+        raise ValueError("Input text for embedding is empty.")
     response = openai_client.embeddings.create(input=[text], model=model)
     return response.data[0].embedding
 
