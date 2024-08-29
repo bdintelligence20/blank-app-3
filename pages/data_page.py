@@ -32,7 +32,7 @@ api_key = st.secrets["openai"]["api_key"]
 openai_client = OpenAI(api_key=api_key)
 
 # Connect to Milvus Lite
-client = MilvusClient("milvus_demo.db")
+client = MilvusClient("./milvus_demo.db")
 
 # Function to preprocess text data using spaCy
 def preprocess_text(text):

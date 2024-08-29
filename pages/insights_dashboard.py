@@ -62,7 +62,7 @@ def search_embeddings(query_text, top_k=5):
             collection_name="text_embeddings",
             data=[query_embedding],
             anns_field="embedding",
-            param=search_params,
+            param=search_params,  # Corrected parameter name
             limit=top_k,
             output_fields=["content"]
         )
@@ -188,25 +188,29 @@ if prompt := st.chat_input("Ask a question about the data or request a graph:"):
         })
         generate_advanced_graph(data, graph_type="scatter")
     
-    # Query the data using GPT-4
-    combined_text = ' '.join(st.session_state['all_texts'])
-    text_chunks = list(chunk_text(combined_text))
-    responses = []
-    for chunk in text_chunks:
-        response = generate_relevant_response(chunk, prompt)
-        responses.append(response)
-    full_response = " ".join(responses)
-    
-    # Summarize the full response
-    summarized_response = summarize_text(full_response)
-    
-    # Display assistant response in chat message container
-    with st.chat_message("assistant"):
-        st.markdown(summarized_response)
-    # Add assistant response to chat history
-    st.session_state.messages.append({"role": "assistant", "content": summarized_response})
+    # Ensure 'all_texts' is in session state
+    if 'all_texts' in st.session_state:
+        # Query the data using GPT-4
+        combined_text = ' '.join(st.session_state['all_texts'])
+        text_chunks = list(chunk_text(combined_text))
+        responses = []
+        for chunk in text_chunks:
+            response = generate_relevant_response(chunk, prompt)
+            responses.append(response)
+        full_response = " ".join(responses)
+        
+        # Summarize the full response
+        summarized_response = summarize_text(full_response)
+        
+        # Display assistant response in chat message container
+        with st.chat_message("assistant"):
+            st.markdown(summarized_response)
+        # Add assistant response to chat history
+        st.session_state.messages.append({"role": "assistant", "content": summarized_response})
 
-    # Embedding search query
-    search_results = search_embeddings(prompt)
-    st.write(search_results)
+        # Embedding search query
+        search_results = search_embeddings(prompt)
+        st.write(search_results)
+    else:
+        st.error("No data available. Please upload data on the data page.")
 
