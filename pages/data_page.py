@@ -13,7 +13,7 @@ import PyPDF2
 import docx
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pymilvus import MilvusClient
+from pymilvus import MilvusClient, CollectionSchema, FieldSchema, DataType
 import numpy as np
 
 # Download necessary NLTK data
@@ -34,12 +34,29 @@ openai_client = OpenAI(api_key=api_key)
 # Connect to Milvus Lite
 client = MilvusClient("./milvus_demo.db")
 
+# Define the schema for the collection
+fields = [
+    FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+    FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
+    FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536)  # Adjust dimension as per your embeddings
+]
+schema = CollectionSchema(fields, description="Text embeddings collection")
+
 # Create collection if it doesn't exist
 if "text_embeddings" not in client.list_collections():
-    client.create_collection(
-        collection_name="text_embeddings",
-        dimension=1536  # Adjust this dimension as per your embeddings
-    )
+    client.create_collection("text_embeddings", schema)
+
+# Function to create index for efficient querying
+def create_index():
+    index_params = {
+        "metric_type": "L2",
+        "index_type": "IVF_FLAT",
+        "params": {"nlist": 1024}
+    }
+    client.create_index("text_embeddings", "embedding", index_params)
+
+# Call create_index function after collection creation
+create_index()
 
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
@@ -53,18 +70,87 @@ def chunk_text(text, chunk_size=2000):
     for i in range(0, len(words), chunk_size):
         yield ' '.join(words[i:i + chunk_size])
 
-# Function to clean division names
-def clean_division_names(df):
-    df['Division'] = df['Division (TD, TT, TA, Impactful)'].str.strip().replace({
-        'TD': 'Talent Development',
-        'TT': 'Talent Technology',
-        'TA': 'Talent Advisory',
-        'Impactful': 'Impactful',
-        'Marketing': 'Marketing',
-        'Markting': 'Marketing',  # Correcting 'Markting' to 'Marketing'
-        'Corporate': 'Corporate'
-    })
-    return df
+# Function to get embeddings using OpenAI and store in Milvus Lite
+def get_embedding(text, model="text-embedding-ada-002"):
+    text = text.replace("\n", " ")
+    if not text.strip():  # Ensure the text is not empty
+        raise ValueError("Input text for embedding is empty.")
+    response = openai_client.embeddings.create(input=[text], model=model)
+    return response.data[0].embedding
+
+# Function to store embeddings in Milvus Lite
+def store_embeddings(texts):
+    data = []
+    for text in texts:
+        preprocessed_text = preprocess_text(text)
+        if preprocessed_text:
+            embedding = get_embedding(preprocessed_text)
+            data.append({
+                "content": text[:65535],  # Truncate to fit VARCHAR max_length
+                "embedding": embedding
+            })
+
+    if data:
+        client.insert("text_embeddings", data)
+        client.flush(["text_embeddings"])  # Ensure data is written to disk
+
+# Function to extract text from URLs
+def extract_text_from_urls(urls):
+    text_data = []
+    for url in urls:
+        try:
+            response = requests.get(url, verify=False)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
+            texts = soup.find_all(text=True)
+            visible_texts = filter(tag_visible, texts)
+            text_data.append(" ".join(t.strip() for t in visible_texts))
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error fetching the URL: {e}")
+    return text_data
+
+# Function to extract text from DOCX files
+def extract_text_from_docx(docx_file):
+    doc = docx.Document(docx_file)
+    full_text = []
+    for para in doc.paragraphs:
+        full_text.append(para.text)
+    return '\n'.join(full_text)
+
+# Function to extract text from PDF files
+def extract_text_from_pdf(pdf_file):
+    pdf_reader = PyPDF2.PdfReader(pdf_file)
+    full_text = []
+    for page in pdf_reader.pages:
+        full_text.append(page.extract_text())
+    return '\n'.join(full_text)
+
+# Function to process uploaded files of various formats
+def process_uploaded_files(files):
+    text_data = []
+    data_frames = {}
+    for file in files:
+        if file.type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']:
+            df = pd.read_excel(file)
+            text_data.extend(df.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
+            data_frames[file.name] = df
+        elif file.type == 'text/csv':
+            df = pd.read_csv(file)
+            text_data.extend(df.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
+            data_frames[file.name] = df
+        elif file.type == 'application/pdf':
+            text_data.append(extract_text_from_pdf(file))
+        elif file.type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+            text_data.append(extract_text_from_docx(file))
+    return text_data, data_frames
+
+# Function to check if a tag is visible
+def tag_visible(element):
+    if element.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]']:
+        return False
+    if isinstance(element, Comment):
+        return False
+    return True
 
 # Function to generate insights using GPT-4 for general data
 def generate_insights(text):
@@ -136,137 +222,8 @@ def generate_comprehensive_keywords(text):
     )
     return response.choices[0].message.content.strip().split('\n')
 
-# Function to check if a tag is visible
-def tag_visible(element):
-    if element.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]']:
-        return False
-    if isinstance(element, Comment):
-        return False
-    return True
-
-# Function to scrape a single webpage
-def scrape_page(url):
-    try:
-        response = requests.get(url, verify=False)  # Disable SSL verification
-        response.raise_for_status()
-        soup = BeautifulSoup(response.content, 'html.parser')
-        texts = soup.find_all(text=True)
-        visible_texts = filter(tag_visible, texts)
-        return " ".join(t.strip() for t in visible_texts)
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error fetching the URL: {e}")
-        return ""
-
-# Function to scrape the main URL and all links in the navigation header
-def scrape_website(url):
-    main_content = scrape_page(url)
-    scraped_data = {"Main": main_content}
-
-    try:
-        response = requests.get(url, verify=False)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        nav_links = soup.find_all('a', href=True)
-
-        # Extract unique links from the navigation
-        links = {link['href'] for link in nav_links if link['href'].startswith('/')}
-
-        for link in links:
-            full_url = f"{url.rstrip('/')}/{link.lstrip('/')}"
-            scraped_data[full_url] = scrape_page(full_url)
-            time.sleep(2)  # Adding delay to prevent rate limiting or being blocked
-
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error fetching the URL: {e}")
-    
-    return scraped_data
-
-# Function to extract text from DOCX files
-def extract_text_from_docx(docx_file):
-    doc = docx.Document(docx_file)
-    full_text = []
-    for para in doc.paragraphs:
-        full_text.append(para.text)
-    return '\n'.join(full_text)
-
-# Function to extract text from PDF files
-def extract_text_from_pdf(pdf_file):
-    pdf_reader = PyPDF2.PdfReader(pdf_file)
-    full_text = []
-    for page in pdf_reader.pages:
-        full_text.append(page.extract_text())
-    return '\n'.join(full_text)
-
-# Function to process uploaded files of various formats
-def process_uploaded_files(files):
-    text_data = []
-    data_frames = {}
-    for file in files:
-        if file.type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']:
-            df = pd.read_excel(file)
-            text_data.extend(df.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
-            data_frames[file.name] = df
-        elif file.type == 'text/csv':
-            df = pd.read_csv(file)
-            text_data.extend(df.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
-            data_frames[file.name] = df
-        elif file.type == 'application/pdf':
-            text_data.append(extract_text_from_pdf(file))
-        elif file.type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-            text_data.append(extract_text_from_docx(file))
-    return text_data, data_frames
-
-# Function to extract text from multiple URLs
-def extract_text_from_urls(urls):
-    text_data = []
-    for url in urls:
-        try:
-            response = requests.get(url, verify=False)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, 'html.parser')
-            texts = soup.find_all(text=True)
-            visible_texts = filter(tag_visible, texts)
-            text_data.append(" ".join(t.strip() for t in visible_texts))
-        except requests.exceptions.RequestException as e:
-            st.error(f"Error fetching the URL: {e}")
-    return text_data
-
-# Function to extract keywords from text data
-def extract_keywords(texts, n=10):
-    vectorizer = CountVectorizer(stop_words='english', ngram_range=(1, 3))
-    X = vectorizer.fit_transform(texts)
-    keywords = vectorizer.get_feature_names_out()
-    counts = X.toarray().sum(axis=0)
-    keyword_counts = pd.DataFrame({'Keyword': keywords, 'Count': counts}).sort_values(by='Count', ascending=False)
-    return keyword_counts.head(n)
-
-# Function to get embeddings using OpenAI and store in Milvus Lite
-def get_embedding(text, model="text-embedding-ada-002"):
-    text = text.replace("\n", " ")
-    if not text.strip():  # Ensure the text is not empty
-        raise ValueError("Input text for embedding is empty.")
-    response = openai_client.embeddings.create(input=[text], model=model)
-    return response.data[0].embedding
-
-# Function to store embeddings in Milvus Lite
-def store_embeddings(texts):
-    embeddings = []
-    for text in texts:
-        # Ensure the text is preprocessed before embedding
-        preprocessed_text = preprocess_text(text)
-        if preprocessed_text:  # Check if preprocessed text is not empty
-            embedding = get_embedding(preprocessed_text)
-            embeddings.append(embedding)
-
-    if embeddings:  # Ensure there are embeddings to insert
-        data = [{"id": i, "vector": embeddings[i]} for i in range(len(embeddings))]
-        client.insert(
-            collection_name="text_embeddings",
-            data=data
-        )
-
 # Function to search embeddings in Milvus Lite
 def search_embeddings(query_text, top_k=5):
-    # Preprocess query text
     preprocessed_query = preprocess_text(query_text)
     query_embedding = get_embedding(preprocessed_query)
     
@@ -275,10 +232,10 @@ def search_embeddings(query_text, top_k=5):
         results = client.search(
             collection_name="text_embeddings",
             data=[query_embedding],
-            anns_field="vector",
-            params=search_params,
+            anns_field="embedding",
+            param=search_params,
             limit=top_k,
-            output_fields=["vector"]
+            output_fields=["content"]
         )
     except Exception as e:
         st.error(f"Failed to query collection: {e}")
