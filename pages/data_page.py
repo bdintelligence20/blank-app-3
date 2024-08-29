@@ -360,7 +360,7 @@ if 'all_texts' in st.session_state:
                         {"role": "user", "content": f"Based on the following data: {chunk}. {user_query}"}
                     ],
                     temperature=0.3,  # Lower temperature for more concise responses
-                    max_tokens=500,
+                    max_tokens=4000,
                     top_p=1,
                     frequency_penalty=0,
                     presence_penalty=0
