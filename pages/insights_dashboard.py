@@ -89,7 +89,7 @@ def summarize_text(text):
             {"role": "user", "content": f"Summarize the following text in a concise manner: {text}"}
         ],
         temperature=0.5,
-        max_tokens=550,
+        max_tokens=150,
         top_p=1,
         frequency_penalty=0,
         presence_penalty=0
@@ -155,7 +155,9 @@ def load_data_chips():
     try:
         results = client.query(
             collection_name="text_embeddings",
-            output_fields=["id"]
+            expr="",
+            output_fields=["id"],
+            limit=100  # Add a limit to the query
         )
         return [result["id"] for result in results]
     except Exception as e:
