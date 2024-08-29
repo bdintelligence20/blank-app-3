@@ -63,7 +63,7 @@ def search_embeddings(query_text):
             collection_name="text_embeddings",
             data=[query_embedding],
             anns_field="embedding",
-            search_params=search_params,  # Corrected parameter name
+            param=search_params,  # Corrected parameter name
             output_fields=["content"]
         )
     except Exception as e:
@@ -93,7 +93,7 @@ def generate_relevant_response(data, query):
 # Function to handle simple queries using a smaller model
 def handle_simple_query(text, query):
     response = openai_client.chat.completions.create(
-        model="gpt-4o",  # Use a smaller model for simple queries
+        model="text-davinci-003",  # Use a smaller model for simple queries
         messages=[
             {"role": "system", "content": "You are an assistant that provides specific information from the text."},
             {"role": "user", "content": f"Based on the following text: {text}. {query}"}
