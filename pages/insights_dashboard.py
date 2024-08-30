@@ -148,22 +148,6 @@ def generate_relevant_response(data, query):
     )
     return response.choices[0].message.content.strip()
 
-# Function to handle simple queries using a smaller model
-def handle_simple_query(text, query):
-    response = openai_client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are an assistant that provides specific information from the text."},
-            {"role": "user", "content": f"Based on the following text: {text}. {query}"}
-        ],
-        temperature=0.3,
-        max_tokens=500,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0
-    )
-    return response.choices[0].message.content.strip()
-
 # Sidebar for data upload and configuration
 st.sidebar.title("Data Upload and Configuration")
 
@@ -307,65 +291,36 @@ if prompt := st.chat_input("Ask a question about the selected documents:"):
         selected_texts = [st.session_state['all_texts'][document_options.index(doc)] for doc in selected_documents]
         combined_text = ' '.join(selected_texts)
 
-        # Handle simple queries using a smaller model
-        simple_response = handle_simple_query(combined_text, prompt)
-        if simple_response:
-            st.write(simple_response)
-        else:
-            # Process the query based on selected chips
-            if "Sentiment Analysis" in selected_chips:
-                st.write("Performing sentiment analysis on the data...")
-                sentiments = perform_sentiment_analysis(selected_texts)
-                st.write(sentiments)
-            
-            if "K-means Clustering" in selected_chips:
-                st.write("Performing K-means clustering on the data...")
-                clusters = perform_kmeans_clustering(selected_texts)
-                st.write(clusters)
-            
-            if "Advanced Graph" in selected_chips:
-                st.write("Generating advanced graph based on the data...")
-                data = pd.DataFrame({
-                    'x': range(10),
-                    'y': range(10),
-                    'label': ['A']*5 + ['B']*5
-                })
-                generate_advanced_graph(data, graph_type="scatter")
-            
-            # Query the data using GPT-4
-            text_chunks = list(chunk_text(combined_text))
-            responses = []
-            for chunk in text_chunks:
-                response = generate_relevant_response(chunk, prompt)
-                responses.append(response)
-            full_response = " ".join(responses)
-            
-            # Display assistant response in chat message container
-            with st.chat_message("assistant"):
-                st.markdown(full_response)
-            # Add assistant response to chat history
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
+        # Query the data using GPT-4
+        text_chunks = list(chunk_text(combined_text))
+        responses = []
+        for chunk in text_chunks:
+            response = generate_relevant_response(chunk, prompt)
+            responses.append(response)
+        full_response = " ".join(responses)
+
+        # Display assistant response in chat message container
+        with st.chat_message("assistant"):
+            st.markdown(full_response)
+        # Add assistant response to chat history
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
+
     elif 'filtered_data_text' in st.session_state:
         # Use the filtered data text for queries
         filtered_text = st.session_state['filtered_data_text']
 
-        # Handle simple queries using a smaller model
-        simple_response = handle_simple_query(filtered_text, prompt)
-        if simple_response:
-            st.write(simple_response)
-        else:
-            # Query the data using GPT-4
-            text_chunks = list(chunk_text(filtered_text))
-            responses = []
-            for chunk in text_chunks:
-                response = generate_relevant_response(chunk, prompt)
-                responses.append(response)
-            full_response = " ".join(responses)
-            
-            # Display assistant response in chat message container
-            with st.chat_message("assistant"):
-                st.markdown(full_response)
-            # Add assistant response to chat history
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
+        # Query the data using GPT-4
+        text_chunks = list(chunk_text(filtered_text))
+        responses = []
+        for chunk in text_chunks:
+            response = generate_relevant_response(chunk, prompt)
+            responses.append(response)
+        full_response = " ".join(responses)
+
+        # Display assistant response in chat message container
+        with st.chat_message("assistant"):
+            st.markdown(full_response)
+        # Add assistant response to chat history
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
     else:
         st.error("No data available. Please upload data or filter a data frame first.")
