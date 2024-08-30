@@ -17,9 +17,6 @@ st.write("Upload documents or scrape websites to create and query an index using
 openai_api_key = st.secrets["openai"]["api_key"]
 llama_cloud_api_key = st.secrets["llama_cloud"]["api_key"]
 
-# Set the OpenAI API key for the OpenAI client
-import openai
-openai.api_key = openai_api_key
 
 # Set up OpenAI LLM with specified model and temperature
 Settings.llm = OpenAI(api_key=openai_api_key, temperature=0.2, model="gpt-4o", max_tokens=4095)
