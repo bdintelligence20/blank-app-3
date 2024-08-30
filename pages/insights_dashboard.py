@@ -24,7 +24,7 @@ import openai
 openai.api_key = openai_api_key
 
 # Initialize OpenAI LLM with specified model and temperature
-llm = OpenAI(api_key=openai_api_key, temperature=0.2, model="gpt-4o", max_tokens=4095)
+llm = OpenAI(api_key=openai_api_key, temperature=1, model="gpt-4o", max_tokens=4095)
 
 # Set your Llama Cloud API key
 os.environ['LLAMA_CLOUD_API_KEY'] = llama_cloud_api_key
