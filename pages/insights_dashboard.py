@@ -128,15 +128,14 @@ if st.session_state.index is not None:
             # Perform the query using the QueryEngine with streaming
             streaming_response = query_engine.query(user_query)
 
-            # Create a placeholder for streaming output
-            response_placeholder = st.empty()
-
-            # Stream the response as it is generated
-            response_text = ""
-            for text in streaming_response.response_gen:
-                response_text += text
-                response_placeholder.markdown(response_text)  # Update the text in the placeholder
-
+            # Check if streaming is enabled and use the correct method
+            if hasattr(streaming_response, "print_response_stream"):
+                response_placeholder = st.empty()
+                for chunk in streaming_response.print_response_stream():
+                    response_placeholder.markdown(chunk)
+            else:
+                st.write("Streaming is not enabled or response object does not support streaming.")
+                
             # Optionally, add a summary or detailed explanation step
             if st.button("Get Summary and Detailed Explanation"):
                 detailed_prompt = f"Provide a detailed explanation and summary for the following: {response_text}"
