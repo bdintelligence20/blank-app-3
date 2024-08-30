@@ -241,21 +241,37 @@ if 'data_frames' in st.session_state and st.session_state['data_frames']:
     st.write("Filtered Data:")
     st.dataframe(filtered_data_frame)
 
-# Chatbot interface for querying data in the main area
+# Main Chatbot Interface
 st.header("Chatbot for Data Analysis")
 
-# Define standard analysis chips
-standard_chips = ["Sentiment Analysis", "K-means Clustering", "Advanced Graph"]
-
-# Drag-and-drop chips interface
-selected_chips = st_tags(
-    label='Drag and drop chips into the query field:',
-    text='Press enter to add more',
-    value=[],
-    suggestions=standard_chips,
-    maxtags=10,
-    key='1'
+# Sticky tags feature at the top left of the chat interface
+st.markdown(
+    """
+    <style>
+    .stSidebar {position: fixed; top: 0; width: 100%; background: white; z-index: 1000;}
+    </style>
+    """,
+    unsafe_allow_html=True
 )
+
+with st.sidebar:
+    # Define standard analysis chips (sticky at the top left of the chat interface)
+    standard_chips = ["Sentiment Analysis", "K-means Clustering", "Advanced Graph"]
+    selected_chips = st_tags(
+        label='Select Analysis Tools:',
+        text='Press enter to add more',
+        value=[],
+        suggestions=standard_chips,
+        maxtags=10,
+        key='1'
+    )
+
+# Fixed Document Query Dropdown to select multiple documents
+if 'document_metadata' in st.session_state:
+    document_options = [f"{doc['source']} ({doc['type']})" for doc in st.session_state['document_metadata']]
+    selected_documents = st.multiselect("Select documents to query:", document_options)
+else:
+    st.error("No documents available. Please upload data on the data page.")
 
 # Initialize chat history
 if "messages" not in st.session_state:
@@ -266,40 +282,33 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Provide a dropdown to select a document
-if 'document_metadata' in st.session_state:
-    document_options = [f"{doc['source']} ({doc['type']})" for doc in st.session_state['document_metadata']]
-    selected_document = st.selectbox("Select a document to query:", document_options)
-else:
-    st.error("No documents available. Please upload data on the data page.")
-
 # Accept user input for chatbot
-if prompt := st.chat_input("Ask a question about the selected document:"):
+if prompt := st.chat_input("Ask a question about the selected documents:"):
     # Display user message in chat message container
     with st.chat_message("user"):
         st.markdown(prompt)
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Process the query based on selected document or filtered data
-    if 'all_texts' in st.session_state and selected_document:
-        selected_index = document_options.index(selected_document)
-        selected_text = st.session_state['all_texts'][selected_index]
+    # Process the query based on selected documents or filtered data
+    if 'all_texts' in st.session_state and selected_documents:
+        selected_texts = [st.session_state['all_texts'][document_options.index(doc)] for doc in selected_documents]
+        combined_text = ' '.join(selected_texts)
 
         # Handle simple queries using a smaller model
-        simple_response = handle_simple_query(selected_text, prompt)
+        simple_response = handle_simple_query(combined_text, prompt)
         if simple_response:
             st.write(simple_response)
         else:
             # Process the query based on selected chips
             if "Sentiment Analysis" in selected_chips:
                 st.write("Performing sentiment analysis on the data...")
-                sentiments = perform_sentiment_analysis([selected_text])
+                sentiments = perform_sentiment_analysis(selected_texts)
                 st.write(sentiments)
             
             if "K-means Clustering" in selected_chips:
                 st.write("Performing K-means clustering on the data...")
-                clusters = perform_kmeans_clustering([selected_text])
+                clusters = perform_kmeans_clustering(selected_texts)
                 st.write(clusters)
             
             if "Advanced Graph" in selected_chips:
@@ -312,7 +321,7 @@ if prompt := st.chat_input("Ask a question about the selected document:"):
                 generate_advanced_graph(data, graph_type="scatter")
             
             # Query the data using GPT-4
-            text_chunks = list(chunk_text(selected_text))
+            text_chunks = list(chunk_text(combined_text))
             responses = []
             for chunk in text_chunks:
                 response = generate_relevant_response(chunk, prompt)
