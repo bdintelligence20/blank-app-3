@@ -9,6 +9,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from llama_index.agent.openai import OpenAIAgent
+from llama_index.tools import QueryTool
 
 # Set up Streamlit page
 st.title("Enhanced RAG Pipeline with LlamaIndex and LlamaParse")
@@ -114,9 +115,9 @@ if st.button("Index Uploaded Documents and Scrape Websites"):
     else:
         st.write("No valid documents or websites provided for indexing.")
 
-# Define tools (you need to define your tools here)
+# Define tools
 tools = [
-    # Define your tools here
+    QueryTool(index=st.session_state.index)
 ]
 
 # Initialize OpenAI agent
