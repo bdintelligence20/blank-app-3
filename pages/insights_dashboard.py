@@ -164,18 +164,18 @@ def handle_simple_query(text, query):
     )
     return response.choices[0].message.content.strip()
 
-# Store data and allow querying through a chatbot interface
-st.title("Unified Data Analysis and Querying Application")
+# Sidebar for data upload and configuration
+st.sidebar.title("Data Upload and Configuration")
 
 # Multi-line text input for URLs
-urls_input = st.text_area("Enter URLs to scrape data (one per line):")
+urls_input = st.sidebar.text_area("Enter URLs to scrape data (one per line):")
 urls = [url.strip() for url in urls_input.splitlines() if url.strip()]
 
 # Multiple file uploader
-uploaded_files = st.file_uploader("Upload multiple files", type=["xlsx", "csv", "pdf", "docx"], accept_multiple_files=True)
+uploaded_files = st.sidebar.file_uploader("Upload multiple files", type=["xlsx", "csv", "pdf", "docx"], accept_multiple_files=True)
 
 # Button to start processing
-if st.button("Submit"):
+if st.sidebar.button("Submit"):
     all_texts = []
     data_frames = {}
     document_metadata = []
@@ -199,38 +199,49 @@ if st.button("Submit"):
     st.session_state['document_metadata'] = document_metadata
 
     # Notify user that data has been scraped
-    st.success("Data has been successfully scraped.")
+    st.sidebar.success("Data has been successfully scraped.")
 
-# Display data frames and allow filtering
+# Display data frames and allow filtering in the sidebar
 if 'data_frames' in st.session_state and st.session_state['data_frames']:
-    st.header("Uploaded Data Preview and Filtering")
+    st.sidebar.header("Uploaded Data Preview and Filtering")
 
     # Select a data frame to preview
     data_frame_names = list(st.session_state['data_frames'].keys())
-    selected_data_frame_name = st.selectbox("Select a data frame to preview and filter:", data_frame_names)
+    selected_data_frame_name = st.sidebar.selectbox("Select a data frame to preview and filter:", data_frame_names)
 
     # Display and filter the selected data frame
     selected_data_frame = st.session_state['data_frames'][selected_data_frame_name]
-    st.write(f"Preview of {selected_data_frame_name}:")
+    st.sidebar.write(f"Preview of {selected_data_frame_name}:")
 
-    # Use Streamlit's experimental data editor for filtering
-    filtered_data_frame = st.experimental_data_editor(selected_data_frame)
+    # Show the dataframe and add filtering options
+    st.sidebar.dataframe(selected_data_frame)
+
+    # Create filtering options dynamically based on the columns
+    filter_columns = st.sidebar.multiselect("Select columns to filter by", selected_data_frame.columns.tolist())
+    
+    filtered_data_frame = selected_data_frame
+
+    for column in filter_columns:
+        unique_values = filtered_data_frame[column].unique()
+        selected_values = st.sidebar.multiselect(f"Filter {column}", unique_values)
+        if selected_values:
+            filtered_data_frame = filtered_data_frame[filtered_data_frame[column].isin(selected_values)]
 
     # Option to query filtered data using chatbot
-    if st.button("Query Filtered Data"):
+    if st.sidebar.button("Query Filtered Data"):
         if filtered_data_frame.empty:
-            st.error("The filtered data frame is empty. Please adjust your filters.")
+            st.sidebar.error("The filtered data frame is empty. Please adjust your filters.")
         else:
             # Convert filtered DataFrame to text for chatbot querying
             filtered_data_text = ' '.join(filtered_data_frame.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
             st.session_state['filtered_data_text'] = filtered_data_text
-            st.success("Filtered data is ready for querying.")
+            st.sidebar.success("Filtered data is ready for querying.")
 
-    # Display the filtered data frame
+    # Display the filtered data frame in the main area
     st.write("Filtered Data:")
     st.dataframe(filtered_data_frame)
 
-# Chatbot interface for querying data
+# Chatbot interface for querying data in the main area
 st.header("Chatbot for Data Analysis")
 
 # Define standard analysis chips
@@ -262,7 +273,7 @@ if 'document_metadata' in st.session_state:
 else:
     st.error("No documents available. Please upload data on the data page.")
 
-# Accept user input
+# Accept user input for chatbot
 if prompt := st.chat_input("Ask a question about the selected document:"):
     # Display user message in chat message container
     with st.chat_message("user"):
