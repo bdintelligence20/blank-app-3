@@ -22,7 +22,7 @@ import openai
 openai.api_key = openai_api_key
 
 # Set up OpenAI LLM with specified model and temperature
-Settings.llm = OpenAI(api_key=openai_api_key, temperature=0.2, model="gpt-4")
+Settings.llm = OpenAI(api_key=openai_api_key, temperature=0.2, model="gpt-4o" max_tokens=4095)
 
 # Set your Llama Cloud API key
 os.environ['LLAMA_CLOUD_API_KEY'] = llama_cloud_api_key
@@ -101,7 +101,9 @@ if st.button("Index Uploaded Documents and Scrape Websites"):
         if st.session_state.index is None:
             st.session_state.index = VectorStoreIndex.from_documents(documents)  # Initialize with documents
         else:
-            st.session_state.index.add_documents(documents)
+            # Recreate the index with existing and new documents
+            all_documents = st.session_state.index.to_documents() + documents
+            st.session_state.index = VectorStoreIndex.from_documents(all_documents)
         
         # Persist the index to disk
         st.session_state.index.storage_context.persist(persist_dir=PERSIST_DIR)
