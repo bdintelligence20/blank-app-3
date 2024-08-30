@@ -44,9 +44,8 @@ if os.path.exists(PERSIST_DIR):
     st.session_state.index = load_index_from_storage(storage_context)
     st.write("Loaded persisted index from disk.")
 
-# Function to process different file types into Document objects using LlamaParse
+# Function to process different file types into Document objects
 def load_document_from_file(file):
-    parser = LlamaParse(result_type="markdown")
     if file.type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
         df = pd.read_excel(file)
         text = df.to_string()
@@ -56,13 +55,21 @@ def load_document_from_file(file):
         text = df.to_string()
         return [Document(text=text)]
     elif file.type == "application/pdf":
-        # Use LlamaParse for better PDF parsing
-        return parser.load_data(file)
+        reader = PyPDF2.PdfFileReader(file)
+        text = ""
+        for page_num in range(reader.numPages):
+            page = reader.getPage(page_num)
+            text += page.extract_text()
+        return [Document(text=text)]
     elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         doc = docx.Document(file)
         text = "\n".join([para.text for para in doc.paragraphs])
         return [Document(text=text)]
+    elif file.type == "text/plain":
+        text = file.read().decode("utf-8")
+        return [Document(text=text)]
     else:
+        st.write(f"Unsupported file type: {file.type}")
         return None
 
 # Function to scrape content from a webpage and parse using LlamaParse
