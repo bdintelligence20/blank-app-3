@@ -134,13 +134,9 @@ if st.session_state.index is not None:
         if user_query:
             # Perform the query using the OpenAIAgent
             response = agent.query(user_query)
+            detailed_prompt = f"Provide a comprehensive answer based on {user_query} and {storage_context}"
             response_text = response.response  # Use the correct attribute or method to get the response text
             st.write(response_text)
                 
-            # Optionally, add a summary or detailed explanation step
-            if st.button("Get Summary and Detailed Explanation"):
-                detailed_prompt = f"Provide a detailed explanation and summary for the following: {response_text}"
-                detailed_response = agent.query(detailed_prompt)
-                st.write("Detailed Response:", detailed_response)
         else:
             st.write("Please enter a query.")
