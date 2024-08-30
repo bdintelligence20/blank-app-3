@@ -118,26 +118,17 @@ response_synthesizer = get_response_synthesizer(response_mode="refine")  # Use "
 
 # Initialize QueryEngine with streaming enabled if the index is not None
 if st.session_state.index is not None:
-    query_engine = st.session_state.index.as_query_engine(response_synthesizer=response_synthesizer, streaming=True)
+    query_engine = st.session_state.index.as_query_engine(response_synthesizer=response_synthesizer)
 
     # User input for query
     user_query = st.text_input("Enter your query:")
 
     if st.button("Submit Query"):
         if user_query:
-            # Perform the query using the QueryEngine with streaming
-            streaming_response = query_engine.query(user_query)
-
-            # Check if streaming is enabled and use the correct method
-            if hasattr(streaming_response, "print_response_stream"):
-                response_placeholder = st.empty()
-                for chunk in streaming_response.print_response_stream():
-                    response_placeholder.markdown(chunk)
-            else:
-                st.write("Streaming is not enabled or response object does not support streaming.")
-                # Fallback to non-streaming response
-                response_text = streaming_response.get_response()
-                st.write(response_text)
+            # Perform the query using the QueryEngine without streaming
+            response = query_engine.query(user_query)
+            response_text = response.response  # Use the correct attribute or method to get the response text
+            st.write(response_text)
                 
             # Optionally, add a summary or detailed explanation step
             if st.button("Get Summary and Detailed Explanation"):
