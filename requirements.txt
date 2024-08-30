@@ -7,3 +7,4 @@ python-docx
 requests
 beautifulsoup4
 llama-parse
+openpyxl
