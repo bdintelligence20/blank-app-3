@@ -244,34 +244,46 @@ if 'data_frames' in st.session_state and st.session_state['data_frames']:
 # Main Chatbot Interface
 st.header("Chatbot for Data Analysis")
 
-# Sticky tags feature at the top left of the chat interface
+# Sticky tags feature and document selection dropdown
 st.markdown(
     """
     <style>
-    .stSidebar {position: fixed; top: 0; width: 100%; background: white; z-index: 1000;}
+    .sticky {
+        position: -webkit-sticky;
+        position: sticky;
+        top: 0;
+        background-color: white;
+        padding: 10px;
+        z-index: 1000;
+        border-bottom: 1px solid #ddd;
+    }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-with st.sidebar:
-    # Define standard analysis chips (sticky at the top left of the chat interface)
-    standard_chips = ["Sentiment Analysis", "K-means Clustering", "Advanced Graph"]
-    selected_chips = st_tags(
-        label='Select Analysis Tools:',
-        text='Press enter to add more',
-        value=[],
-        suggestions=standard_chips,
-        maxtags=10,
-        key='1'
-    )
+# Sticky container for document selection and tags
+st.markdown('<div class="sticky">', unsafe_allow_html=True)
 
-# Fixed Document Query Dropdown to select multiple documents
+# Document selection dropdown to select multiple documents
 if 'document_metadata' in st.session_state:
     document_options = [f"{doc['source']} ({doc['type']})" for doc in st.session_state['document_metadata']]
     selected_documents = st.multiselect("Select documents to query:", document_options)
 else:
     st.error("No documents available. Please upload data on the data page.")
+
+# Define standard analysis chips
+standard_chips = ["Sentiment Analysis", "K-means Clustering", "Advanced Graph"]
+selected_chips = st_tags(
+    label='Select Analysis Tools:',
+    text='Press enter to add more',
+    value=[],
+    suggestions=standard_chips,
+    maxtags=10,
+    key='1'
+)
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 # Initialize chat history
 if "messages" not in st.session_state:
