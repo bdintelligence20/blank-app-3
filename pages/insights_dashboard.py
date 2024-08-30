@@ -10,7 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 
 # Set up Streamlit page
-st.title("RAG Pipeline with LlamaIndex and LlamaParse")
+st.title("Enhanced RAG Pipeline with LlamaIndex and LlamaParse")
 st.write("Upload documents or scrape websites to create and query an index using an LLM.")
 
 # Fetch API keys from Streamlit secrets
@@ -128,6 +128,12 @@ if st.session_state.index is not None:
             response_text = ""
             for text in streaming_response.response_gen:
                 response_text += text
-                response_placeholder.text(response_text)  # Update the text in the placeholder
+                response_placeholder.markdown(response_text)  # Update the text in the placeholder
+
+            # Optionally, add a summary or detailed explanation step
+            if st.button("Get Summary and Detailed Explanation"):
+                detailed_prompt = f"Provide a detailed explanation and summary for the following: {response_text}"
+                detailed_response = query_engine.query(detailed_prompt)
+                st.write("Detailed Response:", detailed_response)
         else:
             st.write("Please enter a query.")
