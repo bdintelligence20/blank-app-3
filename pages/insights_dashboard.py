@@ -30,16 +30,17 @@ os.environ['LLAMA_CLOUD_API_KEY'] = llama_cloud_api_key
 # Directory to persist the index
 PERSIST_DIR = "index_storage"
 
+# Initialize an empty index and documents list in session state if not already present
+if 'index' not in st.session_state:
+    st.session_state.index = None
+if 'documents' not in st.session_state:
+    st.session_state.documents = []
+
 # Check if the persisted index exists and load it
 if os.path.exists(PERSIST_DIR):
     storage_context = StorageContext.from_defaults(persist_dir=PERSIST_DIR)
     st.session_state.index = load_index_from_storage(storage_context)
-    st.session_state.documents = st.session_state.index.documents  # Load documents from index
     st.write("Loaded persisted index from disk.")
-else:
-    # Initialize an empty index or a new one with documents later
-    st.session_state.index = None
-    st.session_state.documents = []  # Initialize empty documents list
 
 # Function to process different file types into Document objects using LlamaParse
 def load_document_from_file(file):
