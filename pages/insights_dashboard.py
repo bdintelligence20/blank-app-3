@@ -1,17 +1,16 @@
-import os
 import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.cluster import KMeans
+from llama_index import LlamaIndex
+from llama_index.readers.web import WebReader
 from openai import OpenAI
 import spacy
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import nltk
 import matplotlib.pyplot as plt
 import plotly.express as px
-import numpy as np
 from streamlit_tags import st_tags
-from scrapegraphai import ScrapeGraphAI
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -24,13 +23,13 @@ sia = SentimentIntensityAnalyzer()
 
 # Access API keys from Streamlit secrets
 api_key = st.secrets["openai"]["api_key"]
-scrapegraph_api_key = st.secrets["scrapegraph"]["api_key"]
 
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=api_key)
 
-# Initialize ScrapeGraphAI client
-scrapegraph_client = ScrapeGraphAI(api_key=scrapegraph_api_key)
+# Initialize LlamaIndex and WebReader
+index = LlamaIndex()
+web_reader = WebReader()
 
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
@@ -53,28 +52,39 @@ def chunk_text(text, chunk_size=2000):
     if current_chunk:
         yield ' '.join(current_chunk)
 
-# Function to extract text from multiple URLs and documents using ScrapeGraphAI
-def extract_text_from_sources(sources):
-    text_data = []
-    try:
-        results = scrapegraph_client.scrape_bulk(sources)  # Use scrape_bulk for URLs and documents
-        for result in results:
-            if result['success']:
-                text_data.append(result['data']['text'])
-            else:
-                st.error(f"Error scraping the source: {result['error']}")
-    except Exception as e:
-        st.error(f"Exception occurred during scraping: {e}")
-    return text_data
+# Function to add documents to LlamaIndex
+def add_documents_to_index(docs):
+    for doc in docs:
+        index.add_document(doc['text'], metadata={'source': doc['source']})
 
-# Function to process uploaded files of various formats
+# Function to retrieve documents from LlamaIndex
+def retrieve_documents(query):
+    results = index.search(query)
+    return [result['text'] for result in results]
+
+# Function to scrape and process websites using LlamaIndex WebReader
+def scrape_and_index_website(url):
+    try:
+        documents = web_reader.read(url)
+        add_documents_to_index(documents)
+        st.sidebar.success(f"Successfully scraped and indexed {url}")
+    except Exception as e:
+        st.sidebar.error(f"Failed to scrape {url}: {e}")
+
+# Function to process uploaded files of various formats using LlamaIndex
 def process_uploaded_files(files):
-    file_paths = []
+    text_data = []
     for file in files:
-        with open(file.name, 'wb') as f:
-            f.write(file.getbuffer())
-            file_paths.append(file.name)
-    return file_paths
+        if file.type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']:
+            df = pd.read_excel(file)
+            text_data.extend(df.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
+        elif file.type == 'text/csv':
+            df = pd.read_csv(file)
+            text_data.extend(df.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
+        elif file.type == 'application/pdf' or file.type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+            documents = index.extract_text(file)
+            text_data.append(documents)
+    return text_data
 
 # Function to perform sentiment analysis
 def perform_sentiment_analysis(texts):
@@ -130,29 +140,26 @@ uploaded_files = st.sidebar.file_uploader("Upload multiple files", type=["xlsx",
 # Button to start processing
 if st.sidebar.button("Submit"):
     all_texts = []
-    document_metadata = []
 
-    # Prepare sources for ScrapeGraphAI
-    sources = urls
+    # Scrape websites and index using LlamaIndex
+    if urls:
+        for url in urls:
+            scrape_and_index_website(url)
 
-    # Process uploaded files and add to sources
+    # Process uploaded files
     if uploaded_files:
-        file_paths = process_uploaded_files(uploaded_files)
-        sources.extend(file_paths)
-        document_metadata.extend([{"source": file.name, "type": file.type} for file in uploaded_files])
+        file_texts = process_uploaded_files(uploaded_files)
+        for text, file in zip(file_texts, uploaded_files):
+            all_texts.append({'text': text, 'source': file.name})
 
-    # Extract text from URLs and documents using ScrapeGraphAI
-    if sources:
-        text_data = extract_text_from_sources(sources)
-        all_texts.extend(text_data)
-        document_metadata.extend([{"source": source, "type": "url" if source in urls else "file"} for source in sources])
+    # Add documents to LlamaIndex
+    add_documents_to_index(all_texts)
 
     # Store all collected texts and metadata in session state
     st.session_state['all_texts'] = all_texts
-    st.session_state['document_metadata'] = document_metadata
 
     # Notify user that data has been scraped
-    st.sidebar.success("Data has been successfully scraped.")
+    st.sidebar.success("Data has been successfully scraped and indexed.")
 
 # Display data frames and allow filtering in the sidebar
 if 'all_texts' in st.session_state and st.session_state['all_texts']:
@@ -192,8 +199,8 @@ st.markdown(
 st.markdown('<div class="sticky">', unsafe_allow_html=True)
 
 # Document selection dropdown to select multiple documents
-if 'document_metadata' in st.session_state:
-    document_options = [f"{doc['source']} ({doc['type']})" for doc in st.session_state['document_metadata']]
+if 'all_texts' in st.session_state:
+    document_options = [f"{doc['source']}" for doc in st.session_state['all_texts']]
     selected_documents = st.multiselect("Select documents to query:", document_options)
 else:
     st.error("No documents available. Please upload data on the data page.")
@@ -228,23 +235,20 @@ if prompt := st.chat_input("Ask a question about the selected documents:"):
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Process the query based on selected documents or all text data
-    if 'all_texts' in st.session_state and selected_documents:
-        selected_texts = [st.session_state['all_texts'][document_options.index(doc)] for doc in selected_documents]
-        combined_text = ' '.join(selected_texts)
+    # Retrieve relevant documents based on the query
+    retrieved_docs = retrieve_documents(prompt)
+    combined_text = ' '.join(retrieved_docs)
 
-        # Query the data using GPT-4
-        text_chunks = list(chunk_text(combined_text))
-        responses = []
-        for chunk in text_chunks:
-            response = generate_relevant_response(chunk, prompt)
-            responses.append(response)
-        full_response = " ".join(responses)
+    # Query the data using GPT-4
+    text_chunks = list(chunk_text(combined_text))
+    responses = []
+    for chunk in text_chunks:
+        response = generate_relevant_response(chunk, prompt)
+        responses.append(response)
+    full_response = " ".join(responses)
 
-        # Display assistant response in chat message container
-        with st.chat_message("assistant"):
-            st.markdown(full_response)
-        # Add assistant response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
-    else:
-        st.error("No data available. Please upload or select data for querying.")
+    # Display assistant response in chat message container
+    with st.chat_message("assistant"):
+        st.markdown(full_response)
+    # Add assistant response to chat history
+    st.session_state.messages.append({"role": "assistant", "content": full_response})

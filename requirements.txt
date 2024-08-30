@@ -20,4 +20,4 @@ python-docx
 pymilvus
 plotly
 streamlit-tags
-scrapegraphai
+llama-index
