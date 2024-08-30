@@ -50,7 +50,7 @@ def extract_text_from_urls(urls):
             response = requests.get(url, verify=False)
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'html.parser')
-            texts = soup.find_all(text=True)
+            texts = soup.find_all(string=True)
             visible_texts = filter(tag_visible, texts)
             text_data.append(" ".join(t.strip() for t in visible_texts))
         except requests.exceptions.RequestException as e:
