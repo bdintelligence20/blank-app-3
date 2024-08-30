@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.cluster import KMeans
-from llama_index import LlamaIndex
+from llama_index import GPTVectorStoreIndex, download_loader, ServiceContext
 from llama_index.readers.web import WebReader
 from openai import OpenAI
 import spacy
@@ -11,6 +11,7 @@ import nltk
 import matplotlib.pyplot as plt
 import plotly.express as px
 from streamlit_tags import st_tags
+import os
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -27,8 +28,8 @@ api_key = st.secrets["openai"]["api_key"]
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=api_key)
 
-# Initialize LlamaIndex and WebReader
-index = LlamaIndex()
+# Initialize LlamaIndex with persistence
+index = GPTVectorStoreIndex(storage_path='index_storage')
 web_reader = WebReader()
 
 # Function to preprocess text data using spaCy
@@ -245,9 +246,8 @@ if prompt := st.chat_input("Ask a question about the selected documents:"):
     for chunk in text_chunks:
         response = generate_relevant_response(chunk, prompt)
         responses.append(response)
-    full_response = " ".join(responses)
-
-    # Display assistant response in chat message container
+    full_response = " ".join(responses) 
+    
     with st.chat_message("assistant"):
         st.markdown(full_response)
     # Add assistant response to chat history
