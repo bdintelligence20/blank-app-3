@@ -121,7 +121,7 @@ if st.session_state.index is not None:
 
     # Define the QueryEngineTool
     query_tool = QueryEngineTool.from_defaults(
-        query_engine, name="Document Query Tool", description="Tool to query the indexed documents."
+        query_engine, name="DocumentQueryTool", description="Tool to query the indexed documents."
     )
 
     # Initialize OpenAI agent with the query tool
