@@ -35,9 +35,18 @@ def preprocess_text(text):
 
 # Function to chunk text into manageable sizes for the model
 def chunk_text(text, chunk_size=2000):
-    words = text.split()
-    for i in range(0, len(words), chunk_size):
-        yield ' '.join(words[i:i + chunk_size])
+    sentences = text.split('. ')
+    current_chunk = []
+    current_length = 0
+    for sentence in sentences:
+        if current_length + len(sentence.split()) > chunk_size:
+            yield ' '.join(current_chunk)
+            current_chunk = []
+            current_length = 0
+        current_chunk.append(sentence)
+        current_length += len(sentence.split())
+    if current_chunk:
+        yield ' '.join(current_chunk)
 
 # Function to generate a comprehensive and relevant response using GPT-4
 def generate_relevant_response(data, query):
@@ -47,8 +56,8 @@ def generate_relevant_response(data, query):
             {"role": "system", "content": "You are an intelligent assistant that provides concise and accurate answers to the user's questions based on the data provided."},
             {"role": "user", "content": f"Based on the following data: {data}. {query}"}
         ],
-        temperature=0.3,  # Lower temperature for more concise responses
-        max_tokens=4000,  # Allow more tokens for comprehensive answers
+        temperature=0.3,
+        max_tokens=4000,
         top_p=1,
         frequency_penalty=0.30,
         presence_penalty=0
@@ -58,7 +67,7 @@ def generate_relevant_response(data, query):
 # Function to handle simple queries using a smaller model
 def handle_simple_query(text, query):
     response = openai_client.chat.completions.create(
-        model="gpt-4o-mini",  # Use a smaller model for simple queries
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are an assistant that provides specific information from the text."},
             {"role": "user", "content": f"Based on the following text: {text}. {query}"}
@@ -70,7 +79,6 @@ def handle_simple_query(text, query):
         presence_penalty=0
     )
     return response.choices[0].message.content.strip()
-
 
 # Function to perform sentiment analysis
 def perform_sentiment_analysis(texts):

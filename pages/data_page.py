@@ -38,9 +38,18 @@ def preprocess_text(text):
 
 # Function to chunk text into manageable sizes for the model
 def chunk_text(text, chunk_size=2000):
-    words = text.split()
-    for i in range(0, len(words), chunk_size):
-        yield ' '.join(words[i:i + chunk_size])
+    sentences = text.split('. ')
+    current_chunk = []
+    current_length = 0
+    for sentence in sentences:
+        if current_length + len(sentence.split()) > chunk_size:
+            yield ' '.join(current_chunk)
+            current_chunk = []
+            current_length = 0
+        current_chunk.append(sentence)
+        current_length += len(sentence.split())
+    if current_chunk:
+        yield ' '.join(current_chunk)
 
 # Function to extract text from URLs
 def extract_text_from_urls(urls):
@@ -60,17 +69,13 @@ def extract_text_from_urls(urls):
 # Function to extract text from DOCX files
 def extract_text_from_docx(docx_file):
     doc = docx.Document(docx_file)
-    full_text = []
-    for para in doc.paragraphs:
-        full_text.append(para.text)
+    full_text = [para.text for para in doc.paragraphs]
     return '\n'.join(full_text)
 
 # Function to extract text from PDF files
 def extract_text_from_pdf(pdf_file):
     pdf_reader = PyPDF2.PdfReader(pdf_file)
-    full_text = []
-    for page in pdf_reader.pages:
-        full_text.append(page.extract_text())
+    full_text = [page.extract_text() for page in pdf_reader.pages if page.extract_text()]
     return '\n'.join(full_text)
 
 # Function to process uploaded files of various formats
