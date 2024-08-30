@@ -20,3 +20,4 @@ python-docx
 pymilvus
 plotly
 streamlit-tags
+scrapegraphai

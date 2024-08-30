@@ -7,15 +7,11 @@ from openai import OpenAI
 import spacy
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import nltk
-import requests
-from bs4 import BeautifulSoup, Comment
-import time
-import PyPDF2
-import docx
 import matplotlib.pyplot as plt
 import plotly.express as px
 import numpy as np
 from streamlit_tags import st_tags
+from scrapegraphai import ScrapeGraphAI
 
 # Download necessary NLTK data
 nltk.download('vader_lexicon')
@@ -28,9 +24,13 @@ sia = SentimentIntensityAnalyzer()
 
 # Access API keys from Streamlit secrets
 api_key = st.secrets["openai"]["api_key"]
+scrapegraph_api_key = st.secrets["scrapegraph"]["api_key"]
 
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=api_key)
+
+# Initialize ScrapeGraphAI client
+scrapegraph_client = ScrapeGraphAI(api_key=scrapegraph_api_key)
 
 # Function to preprocess text data using spaCy
 def preprocess_text(text):
@@ -53,59 +53,28 @@ def chunk_text(text, chunk_size=2000):
     if current_chunk:
         yield ' '.join(current_chunk)
 
-# Function to extract text from URLs
-def extract_text_from_urls(urls):
+# Function to extract text from multiple URLs and documents using ScrapeGraphAI
+def extract_text_from_sources(sources):
     text_data = []
-    for url in urls:
-        try:
-            response = requests.get(url, verify=False)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, 'html.parser')
-            texts = soup.find_all(string=True)
-            visible_texts = filter(tag_visible, texts)
-            text_data.append(" ".join(t.strip() for t in visible_texts))
-        except requests.exceptions.RequestException as e:
-            st.error(f"Error fetching the URL: {e}")
+    try:
+        results = scrapegraph_client.scrape_bulk(sources)  # Use scrape_bulk for URLs and documents
+        for result in results:
+            if result['success']:
+                text_data.append(result['data']['text'])
+            else:
+                st.error(f"Error scraping the source: {result['error']}")
+    except Exception as e:
+        st.error(f"Exception occurred during scraping: {e}")
     return text_data
-
-# Function to extract text from DOCX files
-def extract_text_from_docx(docx_file):
-    doc = docx.Document(docx_file)
-    full_text = [para.text for para in doc.paragraphs]
-    return '\n'.join(full_text)
-
-# Function to extract text from PDF files
-def extract_text_from_pdf(pdf_file):
-    pdf_reader = PyPDF2.PdfReader(pdf_file)
-    full_text = [page.extract_text() for page in pdf_reader.pages if page.extract_text()]
-    return '\n'.join(full_text)
 
 # Function to process uploaded files of various formats
 def process_uploaded_files(files):
-    text_data = []
-    data_frames = {}
+    file_paths = []
     for file in files:
-        if file.type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']:
-            df = pd.read_excel(file)
-            text_data.extend(df.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
-            data_frames[file.name] = df
-        elif file.type == 'text/csv':
-            df = pd.read_csv(file)
-            text_data.extend(df.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
-            data_frames[file.name] = df
-        elif file.type == 'application/pdf':
-            text_data.append(extract_text_from_pdf(file))
-        elif file.type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-            text_data.append(extract_text_from_docx(file))
-    return text_data, data_frames
-
-# Function to check if a tag is visible
-def tag_visible(element):
-    if element.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]']:
-        return False
-    if isinstance(element, Comment):
-        return False
-    return True
+        with open(file.name, 'wb') as f:
+            f.write(file.getbuffer())
+            file_paths.append(file.name)
+    return file_paths
 
 # Function to perform sentiment analysis
 def perform_sentiment_analysis(texts):
@@ -161,69 +130,42 @@ uploaded_files = st.sidebar.file_uploader("Upload multiple files", type=["xlsx",
 # Button to start processing
 if st.sidebar.button("Submit"):
     all_texts = []
-    data_frames = {}
     document_metadata = []
 
-    # Extract text from URLs
-    if urls:
-        url_texts = extract_text_from_urls(urls)
-        all_texts.extend(url_texts)
-        document_metadata.extend([{"source": url, "type": "url"} for url in urls])
+    # Prepare sources for ScrapeGraphAI
+    sources = urls
 
-    # Process uploaded files
+    # Process uploaded files and add to sources
     if uploaded_files:
-        file_texts, file_data_frames = process_uploaded_files(uploaded_files)
-        all_texts.extend(file_texts)
-        data_frames.update(file_data_frames)
+        file_paths = process_uploaded_files(uploaded_files)
+        sources.extend(file_paths)
         document_metadata.extend([{"source": file.name, "type": file.type} for file in uploaded_files])
 
-    # Store all collected texts, data frames, and metadata in session state
+    # Extract text from URLs and documents using ScrapeGraphAI
+    if sources:
+        text_data = extract_text_from_sources(sources)
+        all_texts.extend(text_data)
+        document_metadata.extend([{"source": source, "type": "url" if source in urls else "file"} for source in sources])
+
+    # Store all collected texts and metadata in session state
     st.session_state['all_texts'] = all_texts
-    st.session_state['data_frames'] = data_frames
     st.session_state['document_metadata'] = document_metadata
 
     # Notify user that data has been scraped
     st.sidebar.success("Data has been successfully scraped.")
 
 # Display data frames and allow filtering in the sidebar
-if 'data_frames' in st.session_state and st.session_state['data_frames']:
+if 'all_texts' in st.session_state and st.session_state['all_texts']:
     st.sidebar.header("Uploaded Data Preview and Filtering")
 
-    # Select a data frame to preview
-    data_frame_names = list(st.session_state['data_frames'].keys())
-    selected_data_frame_name = st.sidebar.selectbox("Select a data frame to preview and filter:", data_frame_names)
+    # Placeholder for potential future data frame filtering
 
-    # Display and filter the selected data frame
-    selected_data_frame = st.session_state['data_frames'][selected_data_frame_name]
-    st.sidebar.write(f"Preview of {selected_data_frame_name}:")
-
-    # Show the dataframe and add filtering options
-    st.sidebar.dataframe(selected_data_frame)
-
-    # Create filtering options dynamically based on the columns
-    filter_columns = st.sidebar.multiselect("Select columns to filter by", selected_data_frame.columns.tolist())
-    
-    filtered_data_frame = selected_data_frame
-
-    for column in filter_columns:
-        unique_values = filtered_data_frame[column].unique()
-        selected_values = st.sidebar.multiselect(f"Filter {column}", unique_values)
-        if selected_values:
-            filtered_data_frame = filtered_data_frame[filtered_data_frame[column].isin(selected_values)]
-
-    # Option to query filtered data using chatbot
-    if st.sidebar.button("Query Filtered Data"):
-        if filtered_data_frame.empty:
-            st.sidebar.error("The filtered data frame is empty. Please adjust your filters.")
+    # Option to query all text data using chatbot
+    if st.sidebar.button("Query All Data"):
+        if not st.session_state['all_texts']:
+            st.sidebar.error("No data available to query. Please upload or scrape data first.")
         else:
-            # Convert filtered DataFrame to text for chatbot querying
-            filtered_data_text = ' '.join(filtered_data_frame.apply(lambda x: ' '.join(x.dropna().astype(str)), axis=1).tolist())
-            st.session_state['filtered_data_text'] = filtered_data_text
-            st.sidebar.success("Filtered data is ready for querying.")
-
-    # Display the filtered data frame in the main area
-    st.write("Filtered Data:")
-    st.dataframe(filtered_data_frame)
+            st.sidebar.success("All data is ready for querying.")
 
 # Main Chatbot Interface
 st.header("Chatbot for Data Analysis")
@@ -286,7 +228,7 @@ if prompt := st.chat_input("Ask a question about the selected documents:"):
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Process the query based on selected documents or filtered data
+    # Process the query based on selected documents or all text data
     if 'all_texts' in st.session_state and selected_documents:
         selected_texts = [st.session_state['all_texts'][document_options.index(doc)] for doc in selected_documents]
         combined_text = ' '.join(selected_texts)
@@ -304,23 +246,5 @@ if prompt := st.chat_input("Ask a question about the selected documents:"):
             st.markdown(full_response)
         # Add assistant response to chat history
         st.session_state.messages.append({"role": "assistant", "content": full_response})
-
-    elif 'filtered_data_text' in st.session_state:
-        # Use the filtered data text for queries
-        filtered_text = st.session_state['filtered_data_text']
-
-        # Query the data using GPT-4
-        text_chunks = list(chunk_text(filtered_text))
-        responses = []
-        for chunk in text_chunks:
-            response = generate_relevant_response(chunk, prompt)
-            responses.append(response)
-        full_response = " ".join(responses)
-
-        # Display assistant response in chat message container
-        with st.chat_message("assistant"):
-            st.markdown(full_response)
-        # Add assistant response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
     else:
-        st.error("No data available. Please upload data or filter a data frame first.")
+        st.error("No data available. Please upload or select data for querying.")
