@@ -135,6 +135,9 @@ if st.session_state.index is not None:
                     response_placeholder.markdown(chunk)
             else:
                 st.write("Streaming is not enabled or response object does not support streaming.")
+                # Fallback to non-streaming response
+                response_text = streaming_response.get_response()
+                st.write(response_text)
                 
             # Optionally, add a summary or detailed explanation step
             if st.button("Get Summary and Detailed Explanation"):
