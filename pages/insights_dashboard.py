@@ -122,7 +122,7 @@ tools = [
 # Initialize OpenAI agent
 agent = OpenAIAgent.from_tools(tools, llm=llm, verbose=True)
 
-# Initialize QueryEngine with streaming enabled if the index is not None
+# Query the index and uploaded documents
 if st.session_state.index is not None:
     # User input for query
     user_query = st.text_input("Enter your query:")
