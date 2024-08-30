@@ -29,7 +29,7 @@ api_key = st.secrets["openai"]["api_key"]
 openai_client = OpenAI(api_key=api_key)
 
 # Initialize LlamaIndex with persistence
-index = GPTVectorStoreIndex(storage_path='index_storage')
+index = VectorStoreIndex(storage_path='index_storage')
 web_reader = WebReader()
 
 # Function to preprocess text data using spaCy
