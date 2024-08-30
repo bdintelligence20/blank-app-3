@@ -1,6 +1,6 @@
 import streamlit as st
 from llama_index.llms.openai import OpenAI
-from llama_index.core import Settings, VectorStoreIndex, Document, StorageContext, load_index_from_storage
+from llama_index.core import Settings, VectorStoreIndex, Document, StorageContext, load_index_from_storage, get_response_synthesizer
 from llama_parse import LlamaParse
 import pandas as pd
 import PyPDF2
@@ -17,6 +17,9 @@ st.write("Upload documents or scrape websites to create and query an index using
 openai_api_key = st.secrets["openai"]["api_key"]
 llama_cloud_api_key = st.secrets["llama_cloud"]["api_key"]
 
+# Set the OpenAI API key for the OpenAI client
+import openai
+openai.api_key = openai_api_key
 
 # Set up OpenAI LLM with specified model and temperature
 Settings.llm = OpenAI(api_key=openai_api_key, temperature=0.2, model="gpt-4o", max_tokens=4095)
@@ -31,10 +34,12 @@ PERSIST_DIR = "index_storage"
 if os.path.exists(PERSIST_DIR):
     storage_context = StorageContext.from_defaults(persist_dir=PERSIST_DIR)
     st.session_state.index = load_index_from_storage(storage_context)
+    st.session_state.documents = st.session_state.index.documents  # Load documents from index
     st.write("Loaded persisted index from disk.")
 else:
     # Initialize an empty index or a new one with documents later
     st.session_state.index = None
+    st.session_state.documents = []  # Initialize empty documents list
 
 # Function to process different file types into Document objects using LlamaParse
 def load_document_from_file(file):
@@ -78,29 +83,28 @@ urls = [url.strip() for url in url_input.splitlines() if url.strip()]
 
 # Process and index documents when files are uploaded or URLs are provided
 if st.button("Index Uploaded Documents and Scrape Websites"):
-    documents = []
+    new_documents = []
     
     # Process uploaded files
     if uploaded_files:
         for file in uploaded_files:
             docs = load_document_from_file(file)
             if docs:
-                documents.extend(docs)  # LlamaParse returns a list of documents
+                new_documents.extend(docs)  # LlamaParse returns a list of documents
     
     # Scrape websites
     if urls:
         for url in urls:
             docs = scrape_website(url)
             if docs:
-                documents.extend(docs)
+                new_documents.extend(docs)
     
-    if documents:
-        if st.session_state.index is None:
-            st.session_state.index = VectorStoreIndex.from_documents(documents)  # Initialize with documents
-        else:
-            # Recreate the index with existing and new documents
-            all_documents = st.session_state.index.to_documents() + documents
-            st.session_state.index = VectorStoreIndex.from_documents(all_documents)
+    if new_documents:
+        # Add new documents to session state
+        st.session_state.documents.extend(new_documents)
+        
+        # Recreate the index with all documents
+        st.session_state.index = VectorStoreIndex.from_documents(st.session_state.documents)
         
         # Persist the index to disk
         st.session_state.index.storage_context.persist(persist_dir=PERSIST_DIR)
@@ -108,9 +112,12 @@ if st.button("Index Uploaded Documents and Scrape Websites"):
     else:
         st.write("No valid documents or websites provided for indexing.")
 
+# Configure a comprehensive response synthesizer
+response_synthesizer = get_response_synthesizer(response_mode="refine")  # Use "refine" for detailed answers
+
 # Initialize QueryEngine with streaming enabled if the index is not None
 if st.session_state.index is not None:
-    query_engine = st.session_state.index.as_query_engine(streaming=True)
+    query_engine = st.session_state.index.as_query_engine(response_synthesizer=response_synthesizer, streaming=True)
 
     # User input for query
     user_query = st.text_input("Enter your query:")
