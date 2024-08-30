@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.cluster import KMeans
-from llama_index import GPTVectorStoreIndex, download_loader, ServiceContext
+from llama_index import VectorStoreIndex, download_loader, ServiceContext
 from llama_index.readers.web import WebReader
 from openai import OpenAI
 import spacy
@@ -247,7 +247,7 @@ if prompt := st.chat_input("Ask a question about the selected documents:"):
         response = generate_relevant_response(chunk, prompt)
         responses.append(response)
     full_response = " ".join(responses) 
-    
+
     with st.chat_message("assistant"):
         st.markdown(full_response)
     # Add assistant response to chat history
