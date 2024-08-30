@@ -8,6 +8,7 @@ import docx
 import os
 import requests
 from bs4 import BeautifulSoup
+from llama_index.agent.openai import OpenAIAgent
 
 # Set up Streamlit page
 st.title("Enhanced RAG Pipeline with LlamaIndex and LlamaParse")
@@ -21,8 +22,8 @@ llama_cloud_api_key = st.secrets["llama_cloud"]["api_key"]
 import openai
 openai.api_key = openai_api_key
 
-# Set up OpenAI LLM with specified model and temperature
-Settings.llm = OpenAI(api_key=openai_api_key, temperature=0.2, model="gpt-4o", max_tokens=4095)
+# Initialize OpenAI LLM with specified model and temperature
+llm = OpenAI(api_key=openai_api_key, temperature=0.2, model="gpt-4o", max_tokens=4095)
 
 # Set your Llama Cloud API key
 os.environ['LLAMA_CLOUD_API_KEY'] = llama_cloud_api_key
@@ -113,27 +114,30 @@ if st.button("Index Uploaded Documents and Scrape Websites"):
     else:
         st.write("No valid documents or websites provided for indexing.")
 
-# Configure a comprehensive response synthesizer
-response_synthesizer = get_response_synthesizer(response_mode="refine")  # Use "refine" for detailed answers
+# Define tools (you need to define your tools here)
+tools = [
+    # Define your tools here
+]
+
+# Initialize OpenAI agent
+agent = OpenAIAgent.from_tools(tools, llm=llm, verbose=True)
 
 # Initialize QueryEngine with streaming enabled if the index is not None
 if st.session_state.index is not None:
-    query_engine = st.session_state.index.as_query_engine(response_synthesizer=response_synthesizer)
-
     # User input for query
     user_query = st.text_input("Enter your query:")
 
     if st.button("Submit Query"):
         if user_query:
-            # Perform the query using the QueryEngine without streaming
-            response = query_engine.query(user_query)
+            # Perform the query using the OpenAIAgent
+            response = agent.query(user_query)
             response_text = response.response  # Use the correct attribute or method to get the response text
             st.write(response_text)
                 
             # Optionally, add a summary or detailed explanation step
             if st.button("Get Summary and Detailed Explanation"):
                 detailed_prompt = f"Provide a detailed explanation and summary for the following: {response_text}"
-                detailed_response = query_engine.query(detailed_prompt)
+                detailed_response = agent.query(detailed_prompt)
                 st.write("Detailed Response:", detailed_response)
         else:
             st.write("Please enter a query.")
