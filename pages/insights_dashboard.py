@@ -1,149 +1,122 @@
 import streamlit as st
-from llama_index.llms.openai import OpenAI
-from llama_index.core import Settings, VectorStoreIndex, Document, StorageContext, load_index_from_storage, get_response_synthesizer
-from llama_parse import LlamaParse
-import pandas as pd
-import PyPDF2
-import docx
-import os
-import requests
-from bs4 import BeautifulSoup
-from llama_index.agent.openai import OpenAIAgent
-from llama_index.core.tools import QueryEngineTool
-
-# Set up Streamlit page
-st.title("Enhanced RAG Pipeline with LlamaIndex and LlamaParse")
-st.write("Upload documents or scrape websites to create and query an index using an LLM.")
-
-# Fetch API keys from Streamlit secrets
-openai_api_key = st.secrets["openai"]["api_key"]
-llama_cloud_api_key = st.secrets["llama_cloud"]["api_key"]
-
-# Set the OpenAI API key for the OpenAI client
 import openai
-openai.api_key = openai_api_key
+from llama_index.llms.openai import OpenAI
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
+from sqlalchemy import create_engine, Column, String, Integer, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+import os
+import pandas as pd
 
-# Initialize OpenAI LLM with specified model and temperature
-llm = OpenAI(api_key=openai_api_key, temperature=1, model="gpt-4o", max_tokens=4095)
+# Database setup
+engine = create_engine('sqlite:///knowledge_base.db')
+Base = declarative_base()
 
-# Set your Llama Cloud API key
-os.environ['LLAMA_CLOUD_API_KEY'] = llama_cloud_api_key
+class Document(Base):
+    __tablename__ = 'documents'
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True)
+    content = Column(Text)
 
-# Directory to persist the index
-PERSIST_DIR = "index_storage"
+Base.metadata.create_all(engine)
+Session = sessionmaker(bind=engine)
+session = Session()
 
-# Initialize an empty index and documents list in session state if not already present
-if 'index' not in st.session_state:
-    st.session_state.index = None
-if 'documents' not in st.session_state:
-    st.session_state.documents = []
+def add_document(name, content):
+    doc = Document(name=name, content=content)
+    session.add(doc)
+    session.commit()
 
-# Check if the persisted index exists and load it
-if os.path.exists(PERSIST_DIR):
-    storage_context = StorageContext.from_defaults(persist_dir=PERSIST_DIR)
-    st.session_state.index = load_index_from_storage(storage_context)
-    st.write("Loaded persisted index from disk.")
+def get_documents():
+    return session.query(Document).all()
 
-# Function to process different file types into Document objects
-def load_document_from_file(file):
-    if file.type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-        df = pd.read_excel(file)
-        text = df.to_string()
-        return [Document(text=text)]
-    elif file.type == "text/csv":
-        df = pd.read_csv(file)
-        text = df.to_string()
-        return [Document(text=text)]
-    elif file.type == "application/pdf":
-        reader = PyPDF2.PdfFileReader(file)
-        text = ""
-        for page_num in range(reader.numPages):
-            page = reader.getPage(page_num)
-            text += page.extract_text()
-        return [Document(text=text)]
-    elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        doc = docx.Document(file)
-        text = "\n".join([para.text for para in doc.paragraphs])
-        return [Document(text=text)]
-    elif file.type == "text/plain":
-        text = file.read().decode("utf-8")
-        return [Document(text=text)]
+# Streamlit app setup
+st.set_page_config(
+    page_title="Chat with the Streamlit docs, powered by LlamaIndex",
+    page_icon="🦙",
+    layout="centered",
+    initial_sidebar_state="auto"
+)
+
+openai.api_key = st.secrets.openai_key
+st.title("Chat with the Streamlit docs, powered by LlamaIndex 💬🦙")
+st.info("Check out the full tutorial to build this app in our [blog post](https://blog.streamlit.io/build-a-chatbot-with-custom-data-sources-powered-by-llamaindex/)", icon="📃")
+
+if "messages" not in st.session_state.keys():
+    st.session_state.messages = [
+        {
+            "role": "assistant",
+            "content": "Ask me a question about Streamlit's open-source Python library!",
+        }
+    ]
+
+@st.cache_resource(show_spinner=True)
+def load_data():
+    # Load documents from the database
+    docs = [Document(name=doc.name, content=doc.content) for doc in get_documents()]
+    
+    # Broaden the system prompt for more comprehensive answers
+    Settings.llm = OpenAI(
+        model="gpt-3.5-turbo",
+        temperature=0.2,
+        system_prompt="""You are a highly knowledgeable assistant skilled in 
+        various domains of software development and data science. While your 
+        primary focus is to provide technical assistance regarding the Streamlit 
+        Python library, you are also equipped to offer insights and best practices 
+        in related areas such as web development, machine learning, data visualization, 
+        and Python programming in general. When appropriate, extend your responses to 
+        include broader concepts and useful tips beyond the Streamlit documentation, 
+        ensuring answers are informative and based on well-established knowledge.""",
+    )
+    
+    index = VectorStoreIndex.from_documents([doc.content for doc in docs])
+    return index
+
+
+# Add file upload functionality
+st.header("Upload Document")
+uploaded_file = st.file_uploader("Choose a file", type=["txt", "pdf", "docx", "xlsx", "csv"])
+
+if uploaded_file is not None:
+    file_content = ""
+
+    # Handle different file types
+    if uploaded_file.type == "text/plain":
+        file_content = uploaded_file.read().decode("utf-8")
+    elif uploaded_file.type == "application/pdf":
+        st.error("PDF processing not implemented yet. Please upload a text, CSV, or Excel file.")
+    elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+        df = pd.read_excel(uploaded_file)
+        file_content = df.to_string()
+    elif uploaded_file.type == "text/csv":
+        df = pd.read_csv(uploaded_file)
+        file_content = df.to_string()
     else:
-        st.write(f"Unsupported file type: {file.type}")
-        return None
+        st.error("Unsupported file type.")
 
-# Function to scrape content from a webpage and parse using LlamaParse
-def scrape_website(url):
-    try:
-        response = requests.get(url)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        # Extract all text from the webpage
-        text = ' '.join(soup.stripped_strings)
-        return [Document(text=text)]
-    except Exception as e:
-        st.write(f"Failed to scrape {url}: {e}")
-        return None
+    if file_content:
+        # Save uploaded file content to database
+        add_document(name=uploaded_file.name, content=file_content)
+        st.success(f"Document {uploaded_file.name} added to the knowledge base.")
 
-# File uploader for multiple files
-uploaded_files = st.file_uploader("Upload Excel, CSV, PDF, or Word files", type=["xlsx", "csv", "pdf", "docx"], accept_multiple_files=True)
+index = load_data()
 
-# User input for URLs to scrape
-url_input = st.text_area("Enter URLs to scrape data (one per line):")
-urls = [url.strip() for url in url_input.splitlines() if url.strip()]
-
-# Process and index documents when files are uploaded or URLs are provided
-if st.button("Index Uploaded Documents and Scrape Websites"):
-    new_documents = []
-    
-    # Process uploaded files
-    if uploaded_files:
-        for file in uploaded_files:
-            docs = load_document_from_file(file)
-            if docs:
-                new_documents.extend(docs)  # LlamaParse returns a list of documents
-    
-    # Scrape websites
-    if urls:
-        for url in urls:
-            docs = scrape_website(url)
-            if docs:
-                new_documents.extend(docs)
-    
-    if new_documents:
-        # Add new documents to session state
-        st.session_state.documents.extend(new_documents)
-        
-        # Recreate the index with all documents
-        st.session_state.index = VectorStoreIndex.from_documents(st.session_state.documents)
-        
-        # Persist the index to disk
-        st.session_state.index.storage_context.persist(persist_dir=PERSIST_DIR)
-        st.write("Documents and websites have been indexed and persisted to disk.")
-    else:
-        st.write("No valid documents or websites provided for indexing.")
-
-# Initialize the query engine
-if st.session_state.index is not None:
-    query_engine = st.session_state.index.as_query_engine(response_synthesizer=get_response_synthesizer())
-
-    # Define the QueryEngineTool
-    query_tool = QueryEngineTool.from_defaults(
-        query_engine, name="DocumentQueryTool", description="Tool to query the indexed documents."
+if "chat_engine" not in st.session_state.keys():
+    st.session_state.chat_engine = index.as_chat_engine(
+        chat_mode="condense_question", verbose=True, streaming=True
     )
 
-    # Initialize OpenAI agent with the query tool
-    agent = OpenAIAgent.from_tools([query_tool], llm=llm, verbose=True)
+if prompt := st.chat_input("Ask a question"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # User input for query
-    user_query = st.text_input("Enter your query:")
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
 
-    if st.button("Submit Query"):
-        if user_query:
-            # Perform the query using the OpenAIAgent
-            response = agent.query(user_query)
-            detailed_prompt = f"Provide a comprehensive answer based on {user_query} and {storage_context}"
-            response_text = response.response  # Use the correct attribute or method to get the response text
-            st.write(response_text)
-                
-        else:
-            st.write("Please enter a query.")
+if st.session_state.messages[-1]["role"] != "assistant":
+    with st.chat_message("assistant"):
+        response_stream = st.session_state.chat_engine.stream_chat(prompt)
+        st.write_stream(response_stream.response_gen)
+        message = {"role": "assistant", "content": response_stream.response}
+        st.session_state.messages.append(message)
