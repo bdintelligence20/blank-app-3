@@ -22,56 +22,6 @@ st.set_page_config(
 
 alt.themes.enable("dark")
 
-#######################
-# CSS styling
-st.markdown("""
-<style>
-
-[data-testid="block-container"] {
-    padding-left: 2rem;
-    padding-right: 2rem;
-    padding-top: 1rem;
-    padding-bottom: 0rem;
-    margin-bottom: -7rem;
-}
-
-[data-testid="stVerticalBlock"] {
-    padding-left: 0rem;
-    padding-right: 0rem;
-}
-
-[data-testid="stMetric"] {
-    background-color: #393939;
-    text-align: center;
-    padding: 15px 0;
-}
-
-[data-testid="stMetricLabel"] {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-[data-testid="stMetricDeltaIcon-Up"] {
-    position: relative;
-    left: 38%;
-    -webkit-transform: translateX(-50%);
-    -ms-transform: translateX(-50%);
-    transform: translateX(-50%);
-}
-
-[data-testid="stMetricDeltaIcon-Down"] {
-    position: relative;
-    left: 38%;
-    -webkit-transform: translateX(-50%);
-    -ms-transform: translateX(-50%);
-    transform: translateX(-50%);
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-
 # Initialize OpenAI client using Streamlit secrets
 openai_api_key = st.secrets["openai"]["api_key"]
 client = OpenAI(api_key=openai_api_key)
@@ -140,6 +90,34 @@ if uploaded_files and data is not None and text_columns:
     col1, col2 = st.columns([2, 3], gap="medium")
     
     with col1:
+        # LLM Chat Interface
+        st.markdown("### LLM Chat Interface")
+        if "Topic Modeling" in analysis_options or "Sentiment Analysis" in analysis_options:
+            # Display chat input and messages
+            chat_container = st.container()
+            with chat_container:
+                if prompt := st.chat_input("Ask about the data"):
+                    # Display user message
+                    st.chat_message("user").write(prompt)
+                    
+                    # Query the LLM
+                    response = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": "You are a data assistant that helps analyze data based on the provided dataset."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.7,
+                        max_tokens=150,
+                        top_p=1,
+                        frequency_penalty=0,
+                        presence_penalty=0
+                    )
+                    response_text = response.choices[0].message.content
+                    
+                    # Display assistant response
+                    st.chat_message("assistant").write(response_text)
+        
         if "Word Cloud" in analysis_options:
             st.markdown("### Word Cloud")
             all_text = " ".join(data['processed_text'])
