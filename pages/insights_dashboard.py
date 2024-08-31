@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, Column, String, Integer, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
 import os
 import pandas as pd
+import re
 
 # Database setup
 engine = create_engine('sqlite:///knowledge_base.db')
@@ -38,6 +39,10 @@ def add_document(name, content):
 
 def get_documents():
     return session.query(DocumentEntry).all()
+
+# Helper function to split large text into chunks
+def split_text(text, chunk_size=1000):
+    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
 
 # Streamlit app setup
 st.set_page_config(
@@ -74,9 +79,10 @@ def load_data():
     Settings.llm = OpenAI(
         model="gpt-4o",
         temperature=0.2,
-        max_tokens=4095,
+        max_tokens=1024,  # Reduced to ensure responses fit within the limit
         top_p=1,
-        system_prompt="""ou are also a RAG agent that can retrieve full lists of verbatim elements within a document. When retrieving particular details, you do so with comprehension.""",
+        system_prompt="""You are a RAG agent that can retrieve full lists of verbatim elements within a document. 
+        When retrieving particular details, such as all email addresses, list every instance without omitting any."""
     )
     
     index = VectorStoreIndex.from_documents(docs)  # Use the list of Document objects
@@ -117,6 +123,27 @@ if "chat_engine" not in st.session_state.keys():
 
 if prompt := st.chat_input("Ask a question"):
     st.session_state.messages.append({"role": "user", "content": prompt})
+
+    # Adjust the prompt to include a specific request for a complete list
+    modified_prompt = f"{prompt}. Please provide a complete list without truncation."
+    st.session_state.messages[-1]["content"] = modified_prompt
+
+    response_text = ""
+    if len(prompt) > 1000:  # If the document is too large, split it into chunks
+        chunks = split_text(prompt)
+        for chunk in chunks:
+            response_stream = st.session_state.chat_engine.stream_chat(chunk)
+            response_text += response_stream.response
+    else:
+        response_stream = st.session_state.chat_engine.stream_chat(modified_prompt)
+        response_text = response_stream.response
+
+    # Validate and consolidate all extracted details
+    emails = re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', response_text)
+    if emails:
+        response_text = "\n".join(set(emails))  # Removing duplicates
+
+    st.write(response_text)
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
