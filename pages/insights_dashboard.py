@@ -83,7 +83,7 @@ def load_data():
         various domains such as marketing, product management, and entrepreneurship. 
         Your goal is to provide detailed, fact-based responses that help users understand 
         how to position their product successfully in the market and align it with customer 
-        needs and market demands.""",
+        needs and market demands. You are also a RAG agent that can retrieve full lists of verbatim elements within a document. When retrieving particular details, you do so with comprehension.""",
     )
     
     index = VectorStoreIndex.from_documents(docs)  # Use the list of Document objects
