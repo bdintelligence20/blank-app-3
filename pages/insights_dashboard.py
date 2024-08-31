@@ -6,12 +6,13 @@ from sqlalchemy import create_engine, Column, String, Integer, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
 import os
 import pandas as pd
+from llama_index.core.data_structs import Document  # Import the Document class or equivalent
 
 # Database setup
 engine = create_engine('sqlite:///knowledge_base.db')
 Base = declarative_base()
 
-class Document(Base):
+class DocumentEntry(Base):  # Renamed to avoid confusion with LlamaIndex Document class
     __tablename__ = 'documents'
     
     id = Column(Integer, primary_key=True)
@@ -24,7 +25,7 @@ session = Session()
 
 def add_document(name, content):
     # Check if the document already exists
-    existing_doc = session.query(Document).filter_by(name=name).first()
+    existing_doc = session.query(DocumentEntry).filter_by(name=name).first()
     if existing_doc:
         # Update the existing document's content
         existing_doc.content = content
@@ -32,12 +33,12 @@ def add_document(name, content):
         return
 
     # If document doesn't exist, add a new one
-    doc = Document(name=name, content=content)
+    doc = DocumentEntry(name=name, content=content)
     session.add(doc)
     session.commit()
 
 def get_documents():
-    return session.query(Document).all()
+    return session.query(DocumentEntry).all()
 
 # Streamlit app setup
 st.set_page_config(
@@ -62,10 +63,10 @@ if "messages" not in st.session_state.keys():
 @st.cache_resource(show_spinner=False)
 def load_data():
     # Load documents from the database
-    docs = [Document(name=doc.name, content=doc.content) for doc in get_documents()]
+    docs = [Document(doc_id=str(doc.id), text=doc.content) for doc in get_documents()]
     
     Settings.llm = OpenAI(
-        model="gpt-4o",
+        model="gpt-3.5-turbo",
         temperature=0.2,
         system_prompt="""You are an expert in product-market fit, startup strategy, 
         and business development. Your role is to provide comprehensive insights and 
@@ -79,7 +80,7 @@ def load_data():
         needs and market demands.""",
     )
     
-    index = VectorStoreIndex.from_documents([doc.content for doc in docs])
+    index = VectorStoreIndex.from_documents(docs)  # Use the list of Document objects
     return index
 
 # Add file upload functionality
