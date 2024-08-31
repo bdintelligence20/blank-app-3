@@ -50,7 +50,7 @@ st.set_page_config(
 
 openai.api_key = st.secrets["openai"]["api_key"]
 st.title("Chat with the Streamlit docs, powered by LlamaIndex 💬🦙")
-st.info("Check out the full tutorial to build this app in our [blog post](https://blog.streamlit.io/build-a-chatbot-with-custom-data-sources-powered-by-llamaindex/)", icon="📃")
+st.info("Check out the full tutorial to build this app in our [blog post](https://blog.streamlit.io/build-a-chatbot-with-custom_data-sources-powered-by-llamaindex/)", icon="📃")
 
 if "messages" not in st.session_state.keys():
     st.session_state.messages = [
@@ -121,7 +121,12 @@ if prompt := st.chat_input("Ask a question"):
 
     # Using stream_chat to query the engine
     response_stream = st.session_state.chat_engine.stream_chat(prompt)
-    response_text = "".join([msg['content'] for msg in response_stream.response_gen])  # Combine response stream
+
+    # Check if the response stream is a generator and extract content properly
+    if hasattr(response_stream, 'response_gen') and callable(response_stream.response_gen):
+        response_text = "".join([msg for msg in response_stream.response_gen])
+    else:
+        response_text = response_stream  # Assuming it's a string or similar object
 
     # Extract all email addresses
     emails = re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', response_text, re.IGNORECASE)
