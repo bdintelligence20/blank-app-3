@@ -35,7 +35,10 @@ def load_data(uploaded_file):
 
 # Function to preprocess text
 def preprocess_text(text):
-    return text.lower()
+    if isinstance(text, str):
+        return text.lower()
+    else:
+        return ""
 
 # Function to perform sentiment analysis using TextBlob
 def sentiment_analysis_textblob(text):
