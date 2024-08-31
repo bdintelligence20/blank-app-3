@@ -19,7 +19,8 @@ from flair.data import Sentence
 from flair.models import SequenceTagger
 
 # Initialize OpenAI client
-client = OpenAI()
+openai_api_key = st.secrets["openai"]["api_key"]
+client = OpenAI(api_key=openai_api_key)
 
 # Function to load data
 def load_data(uploaded_file):
