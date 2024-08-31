@@ -1,12 +1,11 @@
 import streamlit as st
 import openai
 from llama_index.llms.openai import OpenAI
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings, Document
 from sqlalchemy import create_engine, Column, String, Integer, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
 import os
 import pandas as pd
-from llama_index.core.data_structs import Document  # Import the Document class or equivalent
 
 # Database setup
 engine = create_engine('sqlite:///knowledge_base.db')
@@ -62,8 +61,15 @@ if "messages" not in st.session_state.keys():
 
 @st.cache_resource(show_spinner=False)
 def load_data():
-    # Load documents from the database
-    docs = [Document(doc_id=str(doc.id), text=doc.content) for doc in get_documents()]
+    # Load documents from the database and convert them to LlamaIndex Document objects
+    docs = [
+        Document(
+            text=doc.content,
+            metadata={"filename": doc.name},
+            doc_id=str(doc.id)
+        ) 
+        for doc in get_documents()
+    ]
     
     Settings.llm = OpenAI(
         model="gpt-3.5-turbo",
