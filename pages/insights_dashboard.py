@@ -7,7 +7,6 @@ import plotly.graph_objs as go
 from wordcloud import WordCloud, STOPWORDS
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.decomposition import PCA
