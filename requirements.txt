@@ -9,4 +9,5 @@ vaderSentiment
 spacy
 scikit-learn
 openai
-
+numpy
+thinc
