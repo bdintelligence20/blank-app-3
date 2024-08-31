@@ -3,12 +3,14 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import plotly.express as px
+from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
+from openai import OpenAI
+from sklearn.manifold import TSNE
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from wordcloud import WordCloud, STOPWORDS
 from textblob import TextBlob
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.decomposition import LatentDirichletAllocation
-from openai import OpenAI
 
 # Page configuration
 st.set_page_config(
@@ -67,7 +69,7 @@ with st.sidebar:
             # Analysis options
             analysis_options = st.multiselect(
                 "Select analysis types",
-                ["Topic Modeling", "Sentiment Analysis", "Word Cloud", "Topic Heatmap"]
+                ["Topic Modeling", "Sentiment Analysis", "Word Cloud", "Topic Clustering"]
             )
 
 # Main Dashboard
@@ -121,20 +123,47 @@ if uploaded_files and data is not None and text_columns:
             lda.fit(dtm)
             topics_df = pd.DataFrame(lda.components_, columns=vectorizer.get_feature_names_out())
             st.dataframe(topics_df)
-        
-        if "Topic Heatmap" in analysis_options:
-            st.markdown("### Topic Heatmap")
-            topic_dist = lda.transform(dtm)
-            heatmap = alt.Chart(pd.DataFrame(topic_dist)).mark_rect().encode(
-                x=alt.X('column:O', title='Topic'),
-                y=alt.Y('index:O', title='Document'),
-                color=alt.Color('value:Q', scale=alt.Scale(scheme=selected_color_theme))
-            ).properties(width=600, height=400)
-            st.altair_chart(heatmap, use_container_width=True)
+            
+            # Clustering Topics
+            st.markdown("### Topic Clustering")
+            kmeans = KMeans(n_clusters=n_topics, random_state=42)
+            topics_clustered = kmeans.fit_predict(lda.components_)
+            tsne = TSNE(n_components=2, random_state=42)
+            tsne_results = tsne.fit_transform(lda.components_)
+            cluster_df = pd.DataFrame(tsne_results, columns=['X', 'Y'])
+            cluster_df['Cluster'] = topics_clustered
+            
+            # Scatter plot for clusters
+            scatter_plot = px.scatter(cluster_df, x='X', y='Y', color='Cluster', color_continuous_scale=selected_color_theme)
+            scatter_plot.update_layout(template="plotly_dark")
+            st.plotly_chart(scatter_plot, use_container_width=True)
+            
+            # LLM Interpretation for Each Cluster
+            st.markdown("### LLM Interpretations of Clusters")
+            interpretations = []
+            for cluster_num in range(n_topics):
+                cluster_text = " ".join(vectorizer.get_feature_names_out()[topics_df.iloc[cluster_num].argsort()[-10:]])
+                interpretation_prompt = f"Interpret the following cluster of topics: {cluster_text}"
+                
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "system", "content": "You are a data analyst."},
+                              {"role": "user", "content": interpretation_prompt}],
+                    temperature=1,
+                    max_tokens=150,
+                    top_p=1,
+                    frequency_penalty=0,
+                    presence_penalty=0
+                )
+                interpretation = response.choices[0].message.content
+                interpretations.append(f"**Cluster {cluster_num+1}**: {interpretation}")
+            
+            for interpretation in interpretations:
+                st.markdown(interpretation)
     
     with st.expander("About"):
         st.write("""
-            - **Dashboard Features**: Provides qualitative data analysis including topic modeling, sentiment analysis, and visualization tools like word clouds and heatmaps.
+            - **Dashboard Features**: Provides qualitative data analysis including topic modeling, sentiment analysis, clustering of topics, and visualization tools like word clouds and scatter plots.
             - **Customization**: Users can choose the data columns for analysis and select different color themes for visualizations.
             - **Data Handling**: Supports multiple file uploads and handles different formats (CSV, JSON, TXT).
         """)
