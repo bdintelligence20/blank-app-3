@@ -8,3 +8,5 @@ requests
 beautifulsoup4
 llama-parse
 openpyxl
+sqlalchemy
+numpy
