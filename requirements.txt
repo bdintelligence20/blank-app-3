@@ -1,4 +1,4 @@
-streamlit==1.25.0
+streamlit
 pandas==1.5.3
 matplotlib==3.8.1
 seaborn==0.12.2
@@ -8,6 +8,6 @@ textblob==0.17.1
 vaderSentiment==3.3.2
 spacy==3.7.3
 scikit-learn==1.4.2
-openai==0.28.0
+openai
 numpy==1.23.5
 thinc==8.1.10
