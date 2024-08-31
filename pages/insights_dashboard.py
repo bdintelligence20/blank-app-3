@@ -40,10 +40,6 @@ def add_document(name, content):
 def get_documents():
     return session.query(DocumentEntry).all()
 
-# Helper function to split large text into chunks
-def split_text(text, chunk_size=1000):
-    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
-
 # Streamlit app setup
 st.set_page_config(
     page_title="Chat with the Streamlit docs, powered by LlamaIndex",
@@ -79,12 +75,12 @@ def load_data():
     Settings.llm = OpenAI(
         model="gpt-4o-mini",
         temperature=0.2,
-        max_tokens=16383,  # Reduced to ensure responses fit within the limit
+        max_tokens=4096,  # Ensure it fits within model's token limit
         top_p=1,
-        system_prompt="""You are a helpful assistant."""
+        system_prompt="""You are a helpful assistant that provides complete and comprehensive responses based on the full content of the documents you have indexed."""
     )
     
-    index = VectorStoreIndex.from_documents(docs)  # Use the list of Document objects
+    index = VectorStoreIndex.from_documents(docs)  # Ensure all content is indexed
     return index
 
 # Add file upload functionality
@@ -123,24 +119,14 @@ if "chat_engine" not in st.session_state.keys():
 if prompt := st.chat_input("Ask a question"):
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Adjust the prompt to include a specific request for a complete list
-    modified_prompt = f"{prompt}. Please provide a complete list without truncation."
-    st.session_state.messages[-1]["content"] = modified_prompt
+    # Query the vector index directly for complete context
+    full_query_response = st.session_state.chat_engine.query(prompt)
+    response_text = full_query_response.response  # Capture the full response
 
-    response_text = ""
-    if len(prompt) > 1000:  # If the document is too large, split it into chunks
-        chunks = split_text(prompt)
-        for chunk in chunks:
-            response_stream = st.session_state.chat_engine.stream_chat(chunk)
-            response_text += response_stream.response
-    else:
-        response_stream = st.session_state.chat_engine.stream_chat(modified_prompt)
-        response_text = response_stream.response
-
-    # Validate and consolidate all extracted details
-    emails = re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', response_text)
+    # Extract all email addresses
+    emails = re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', response_text, re.IGNORECASE)
     if emails:
-        response_text = "\n".join(set(emails))  # Removing duplicates
+        response_text = "\n".join(sorted(set(emails)))  # Removing duplicates and sorting
 
     st.write(response_text)
 
