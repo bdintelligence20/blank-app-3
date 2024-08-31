@@ -72,7 +72,7 @@ def load_data():
     ]
     
     Settings.llm = OpenAI(
-        model="gpt-3.5-turbo",
+        model="gpt-4o",
         temperature=0.2,
         system_prompt="""You are an expert in product-market fit, startup strategy, 
         and business development. Your role is to provide comprehensive insights and 
