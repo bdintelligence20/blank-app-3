@@ -119,9 +119,9 @@ if "chat_engine" not in st.session_state.keys():
 if prompt := st.chat_input("Ask a question"):
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Query the vector index directly for complete context
-    full_query_response = st.session_state.chat_engine.query(prompt)
-    response_text = full_query_response.response  # Capture the full response
+    # Using stream_chat to query the engine
+    response_stream = st.session_state.chat_engine.stream_chat(prompt)
+    response_text = "".join([msg['content'] for msg in response_stream.response_gen])  # Combine response stream
 
     # Extract all email addresses
     emails = re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', response_text, re.IGNORECASE)
