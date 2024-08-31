@@ -77,12 +77,11 @@ def load_data():
     ]
     
     Settings.llm = OpenAI(
-        model="gpt-4o",
+        model="gpt-4o-mini",
         temperature=0.2,
-        max_tokens=1024,  # Reduced to ensure responses fit within the limit
+        max_tokens=16383,  # Reduced to ensure responses fit within the limit
         top_p=1,
-        system_prompt="""You are a RAG agent that can retrieve full lists of verbatim elements within a document. 
-        When retrieving particular details, such as all email addresses, list every instance without omitting any."""
+        system_prompt="""You are a helpful assistant."""
     )
     
     index = VectorStoreIndex.from_documents(docs)  # Use the list of Document objects
