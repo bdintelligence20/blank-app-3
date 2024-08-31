@@ -3,8 +3,7 @@ import openai
 from llama_index.llms.openai import OpenAI
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
 from sqlalchemy import create_engine, Column, String, Integer, Text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 import os
 import pandas as pd
 
@@ -24,6 +23,15 @@ Session = sessionmaker(bind=engine)
 session = Session()
 
 def add_document(name, content):
+    # Check if the document already exists
+    existing_doc = session.query(Document).filter_by(name=name).first()
+    if existing_doc:
+        # Update the existing document's content
+        existing_doc.content = content
+        session.commit()
+        return
+
+    # If document doesn't exist, add a new one
     doc = Document(name=name, content=content)
     session.add(doc)
     session.commit()
@@ -47,32 +55,32 @@ if "messages" not in st.session_state.keys():
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "Ask me a question!",
+            "content": "Ask me a question about Streamlit's open-source Python library!",
         }
     ]
 
-@st.cache_resource(show_spinner=True)
+@st.cache_resource(show_spinner=False)
 def load_data():
     # Load documents from the database
     docs = [Document(name=doc.name, content=doc.content) for doc in get_documents()]
     
-    # Broaden the system prompt for more comprehensive answers
     Settings.llm = OpenAI(
         model="gpt-4o",
         temperature=0.2,
-        system_prompt="""You are a highly knowledgeable assistant skilled in 
-        various domains of software development and data science. While your 
-        primary focus is to provide technical assistance regarding the Streamlit 
-        Python library, you are also equipped to offer insights and best practices 
-        in related areas such as web development, machine learning, data visualization, 
-        and Python programming in general. When appropriate, extend your responses to 
-        include broader concepts and useful tips beyond the Streamlit documentation, 
-        ensuring answers are informative and based on well-established knowledge.""",
+        system_prompt="""You are an expert in product-market fit, startup strategy, 
+        and business development. Your role is to provide comprehensive insights and 
+        actionable advice on achieving product-market fit. You are well-versed in 
+        analyzing market trends, customer feedback, competitive landscapes, and business 
+        models. When answering questions, you should incorporate relevant insights from 
+        the uploaded documentation and websites, as well as additional knowledge from 
+        various domains such as marketing, product management, and entrepreneurship. 
+        Your goal is to provide detailed, fact-based responses that help users understand 
+        how to position their product successfully in the market and align it with customer 
+        needs and market demands.""",
     )
     
     index = VectorStoreIndex.from_documents([doc.content for doc in docs])
     return index
-
 
 # Add file upload functionality
 st.header("Upload Document")
