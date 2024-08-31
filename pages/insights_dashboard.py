@@ -10,7 +10,6 @@ from openai import OpenAI
 from sklearn.manifold import TSNE
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from wordcloud import WordCloud, STOPWORDS
-from textblob import TextBlob
 
 # Page configuration
 st.set_page_config(
@@ -79,12 +78,8 @@ if uploaded_files and data is not None and text_columns:
 
     # Executive Summary
     st.markdown("## Executive Summary")
-    st.markdown("""
-    - **Overall Sentiment**: The average sentiment across all analyzed texts shows a **positive/negative** trend.
-    - **Top Topics**: The most discussed topics are related to **Customer Service, Product Feedback,** and **Pricing**.
-    - **Key Insights**: Significant increase in negative sentiment in the past month. Suggest reviewing customer feedback closely to identify pain points.
-    """)
-
+    st.markdown(f"- **Data Overview**: The dataset contains {len(data)} rows and the following selected columns: {', '.join(text_columns)}.")
+    
     # Dashboard layout
     st.markdown("## Data Analysis Results")
     col1, col2 = st.columns([2, 3], gap="medium")
@@ -92,23 +87,31 @@ if uploaded_files and data is not None and text_columns:
     with col1:
         # LLM Chat Interface
         st.markdown("### LLM Chat Interface")
-        if "Topic Modeling" in analysis_options or "Sentiment Analysis" in analysis_options:
+        if text_columns:
+            # Create a data summary for context based on selected columns
+            column_descriptions = ""
+            for col in text_columns:
+                sample_values = ', '.join(data[col].astype(str).sample(3).values)
+                column_descriptions += f"Column '{col}' has sample values like: {sample_values}. "
+
+            data_summary = f"The dataset contains {len(data)} rows and the following columns: {', '.join(text_columns)}. {column_descriptions}"
+            
             # Display chat input and messages
             chat_container = st.container()
             with chat_container:
-                if prompt := st.chat_input("Ask about the data"):
+                if prompt := st.chat_input("Ask a question about the data"):
                     # Display user message
                     st.chat_message("user").write(prompt)
                     
-                    # Query the LLM
+                    # Query the LLM with data context
                     response = client.chat.completions.create(
                         model="gpt-4o-mini",
                         messages=[
-                            {"role": "system", "content": "You are a data assistant that helps analyze data based on the provided dataset."},
+                            {"role": "system", "content": f"You are an expert data analyst. Use the following dataset details to answer the user's questions: {data_summary}"},
                             {"role": "user", "content": prompt}
                         ],
                         temperature=0.7,
-                        max_tokens=150,
+                        max_tokens=300,
                         top_p=1,
                         frequency_penalty=0,
                         presence_penalty=0
