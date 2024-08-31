@@ -74,16 +74,9 @@ def load_data():
     Settings.llm = OpenAI(
         model="gpt-4o",
         temperature=0.2,
-        system_prompt="""You are an expert in product-market fit, startup strategy, 
-        and business development. Your role is to provide comprehensive insights and 
-        actionable advice on achieving product-market fit. You are well-versed in 
-        analyzing market trends, customer feedback, competitive landscapes, and business 
-        models. When answering questions, you should incorporate relevant insights from 
-        the uploaded documentation and websites, as well as additional knowledge from 
-        various domains such as marketing, product management, and entrepreneurship. 
-        Your goal is to provide detailed, fact-based responses that help users understand 
-        how to position their product successfully in the market and align it with customer 
-        needs and market demands. You are also a RAG agent that can retrieve full lists of verbatim elements within a document. When retrieving particular details, you do so with comprehension.""",
+        max_tokens=4095,
+        top_p=1,
+        system_prompt="""ou are also a RAG agent that can retrieve full lists of verbatim elements within a document. When retrieving particular details, you do so with comprehension.""",
     )
     
     index = VectorStoreIndex.from_documents(docs)  # Use the list of Document objects
