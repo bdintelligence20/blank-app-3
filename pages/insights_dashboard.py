@@ -39,7 +39,7 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-openai.api_key = st.secrets.openai_key
+openai.api_key = st.secrets["openai"]["api_key"]
 st.title("Chat with the Streamlit docs, powered by LlamaIndex 💬🦙")
 st.info("Check out the full tutorial to build this app in our [blog post](https://blog.streamlit.io/build-a-chatbot-with-custom-data-sources-powered-by-llamaindex/)", icon="📃")
 
@@ -47,7 +47,7 @@ if "messages" not in st.session_state.keys():
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "Ask me a question about Streamlit's open-source Python library!",
+            "content": "Ask me a question!",
         }
     ]
 
@@ -58,7 +58,7 @@ def load_data():
     
     # Broaden the system prompt for more comprehensive answers
     Settings.llm = OpenAI(
-        model="gpt-3.5-turbo",
+        model="gpt-4o",
         temperature=0.2,
         system_prompt="""You are a highly knowledgeable assistant skilled in 
         various domains of software development and data science. While your 
