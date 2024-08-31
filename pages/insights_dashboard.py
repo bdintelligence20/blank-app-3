@@ -8,17 +8,15 @@ from wordcloud import WordCloud, STOPWORDS
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.decomposition import LatentDirichletAllocation
-from sklearn.decomposition import PCA
+from sklearn.decomposition import LatentDirichletAllocation, PCA
 from sklearn.manifold import TSNE
 from sklearn.cluster import KMeans
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
 from openai import OpenAI
-
-# Load spaCy model for NER
-nlp = spacy.load("en_core_web_sm")
+from flair.data import Sentence
+from flair.models import SequenceTagger
 
 # Initialize OpenAI client
 client = OpenAI()
@@ -35,16 +33,8 @@ def load_data(uploaded_file):
     return None
 
 # Function to preprocess text
-def preprocess_text(text, lower=True, remove_stopwords=True, lemmatize=True):
-    doc = nlp(text)
-    if lower:
-        text = text.lower()
-    tokens = [token.text for token in doc]
-    if remove_stopwords:
-        tokens = [token for token in tokens if not nlp.vocab[token].is_stop]
-    if lemmatize:
-        tokens = [token.lemma_ for token in nlp(" ".join(tokens))]
-    return " ".join(tokens)
+def preprocess_text(text):
+    return text.lower()
 
 # Function to perform sentiment analysis using TextBlob
 def sentiment_analysis_textblob(text):
@@ -82,10 +72,12 @@ def display_topics(model, feature_names, no_top_words):
         topics[f"Topic {topic_idx+1}"] = " ".join([feature_names[i] for i in topic.argsort()[:-no_top_words - 1:-1]])
     return pd.DataFrame(topics.items(), columns=["Topic", "Top Words"])
 
-# Function to perform NER and extract entities
+# Function to perform named entity recognition using Flair
 def named_entity_recognition(text):
-    doc = nlp(text)
-    entities = [(ent.text, ent.label_) for ent in doc.ents]
+    sentence = Sentence(text)
+    tagger = SequenceTagger.load("ner")
+    tagger.predict(sentence)
+    entities = [(entity.text, entity.get_label("ner").value) for entity in sentence.get_spans("ner")]
     return entities
 
 # Function to perform clustering and dimensionality reduction
@@ -121,7 +113,7 @@ def query_llm(messages):
     return response.choices[0].message['content']
 
 # Streamlit App
-st.title("Ultra-Advanced Qualitative Data Analysis Tool with LLM Assistant")
+st.title("Ultra-Advanced Qualitative Data Analysis Tool with Flair NLP")
 
 # File upload
 uploaded_file = st.file_uploader("Upload your qualitative data file (CSV, JSON, or TXT)", type=["csv", "json", "txt"])
@@ -135,13 +127,8 @@ if uploaded_file:
         # Choose the text column for analysis
         text_column = st.selectbox("Select the column containing text data", data.columns)
         
-        # Preprocessing options
-        lower = st.checkbox("Convert to lowercase", value=True)
-        remove_stopwords = st.checkbox("Remove stopwords", value=True)
-        lemmatize = st.checkbox("Lemmatize", value=True)
-        
         # Preprocess text data
-        data['processed_text'] = data[text_column].apply(lambda x: preprocess_text(x, lower, remove_stopwords, lemmatize))
+        data['processed_text'] = data[text_column].apply(preprocess_text)
         
         # Word Cloud
         st.write("### Word Cloud")
@@ -208,13 +195,11 @@ if uploaded_file:
         st.write("### LLM Data Assistant")
         user_question = st.text_input("Ask a question about the data", placeholder="Enter your question here...")
 
-        # If a question is provided by the user
         if user_question:
-            # Preparing messages for the LLM
             messages = [
                 {
                     "role": "system",
-                    "content": "You are a data assistant capable of analyzing qualitative data and answering questions based on the dataset provided."
+                                        "content": "You are a data assistant capable of analyzing qualitative data and answering questions based on the dataset provided."
                 },
                 {
                     "role": "user",
@@ -222,7 +207,7 @@ if uploaded_file:
                 }
             ]
             
-            # Query the LLM
+            # Query the LLM with the user's question
             with st.spinner("Analyzing your question..."):
                 response_text = query_llm(messages)
                 
@@ -235,3 +220,4 @@ if uploaded_file:
 
 else:
     st.info("Please upload a qualitative data file for analysis.")
+

@@ -6,8 +6,8 @@ plotly
 wordcloud
 textblob
 vaderSentiment
-spacy==3.7.3
 scikit-learn
 openai
 numpy
-
+torch
+flair
