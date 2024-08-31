@@ -22,6 +22,56 @@ st.set_page_config(
 
 alt.themes.enable("dark")
 
+#######################
+# CSS styling
+st.markdown("""
+<style>
+
+[data-testid="block-container"] {
+    padding-left: 2rem;
+    padding-right: 2rem;
+    padding-top: 1rem;
+    padding-bottom: 0rem;
+    margin-bottom: -7rem;
+}
+
+[data-testid="stVerticalBlock"] {
+    padding-left: 0rem;
+    padding-right: 0rem;
+}
+
+[data-testid="stMetric"] {
+    background-color: #393939;
+    text-align: center;
+    padding: 15px 0;
+}
+
+[data-testid="stMetricLabel"] {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+[data-testid="stMetricDeltaIcon-Up"] {
+    position: relative;
+    left: 38%;
+    -webkit-transform: translateX(-50%);
+    -ms-transform: translateX(-50%);
+    transform: translateX(-50%);
+}
+
+[data-testid="stMetricDeltaIcon-Down"] {
+    position: relative;
+    left: 38%;
+    -webkit-transform: translateX(-50%);
+    -ms-transform: translateX(-50%);
+    transform: translateX(-50%);
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
 # Initialize OpenAI client using Streamlit secrets
 openai_api_key = st.secrets["openai"]["api_key"]
 client = OpenAI(api_key=openai_api_key)
@@ -128,7 +178,10 @@ if uploaded_files and data is not None and text_columns:
             st.markdown("### Topic Clustering")
             kmeans = KMeans(n_clusters=n_topics, random_state=42)
             topics_clustered = kmeans.fit_predict(lda.components_)
-            tsne = TSNE(n_components=2, random_state=42)
+            
+            # Adjust perplexity to be less than the number of topics
+            perplexity = min(30, len(lda.components_) - 1)
+            tsne = TSNE(n_components=2, random_state=42, perplexity=perplexity)
             tsne_results = tsne.fit_transform(lda.components_)
             cluster_df = pd.DataFrame(tsne_results, columns=['X', 'Y'])
             cluster_df['Cluster'] = topics_clustered
