@@ -55,14 +55,18 @@ with st.sidebar:
                     else:
                         st.error("Unsupported file type!")
                         return None
-                except UnicodeDecodeError:
-                    # Retry with different encodings
+                except (UnicodeDecodeError, pd.errors.EmptyDataError):
                     try:
+                        # Retry with different encodings for CSV files
                         df = pd.read_csv(uploaded_file, encoding='ISO-8859-1')
-                    except UnicodeDecodeError:
-                        df = pd.read_csv(uploaded_file, encoding='utf-16')
+                    except (UnicodeDecodeError, pd.errors.EmptyDataError):
+                        try:
+                            df = pd.read_csv(uploaded_file, encoding='utf-16')
+                        except pd.errors.EmptyDataError:
+                            st.error(f"The file {uploaded_file.name} is empty or has no columns to parse. Skipping this file.")
+                            continue
                 dataframes.append(df)
-            return pd.concat(dataframes, ignore_index=True)
+            return pd.concat(dataframes, ignore_index=True) if dataframes else pd.DataFrame()
         
         data = load_data(uploaded_files)
         
@@ -159,19 +163,29 @@ if uploaded_files and data is not None and text_columns:
         # Keyword Search Volume Feature
         if "Keyword Search Volume" in analysis_options and keyword_file is not None:
             st.markdown("### Keyword Search Volume")
-            keyword_data = pd.read_csv(keyword_file, encoding='utf-8', errors='ignore')
+            try:
+                keyword_data = pd.read_csv(keyword_file, encoding='utf-8')
+            except UnicodeDecodeError:
+                try:
+                    keyword_data = pd.read_csv(keyword_file, encoding='ISO-8859-1')
+                except UnicodeDecodeError:
+                    keyword_data = pd.read_csv(keyword_file, encoding='utf-16')
             
-            # Assuming keyword data has columns 'Keyword' and 'Search Volume'
-            keywords = keyword_data['Keyword'].str.lower().tolist()
-            search_volumes = keyword_data.set_index('Keyword')['Search Volume'].to_dict()
-            
-            # Match keywords in processed text with keyword data
-            matched_keywords = set(data['processed_text'].str.split().explode()) & set(keywords)
-            matched_keywords_df = pd.DataFrame(
-                [(kw, search_volumes[kw]) for kw in matched_keywords],
-                columns=['Keyword', 'Search Volume']
-            )
-            st.dataframe(matched_keywords_df.sort_values(by='Search Volume', ascending=False))
+            # Adjust column names based on your file
+            if 'Keyword' in keyword_data.columns and 'Avg. monthly searches' in keyword_data.columns:
+                keyword_data.rename(columns={'Avg. monthly searches': 'Search Volume'}, inplace=True)
+                keywords = keyword_data['Keyword'].str.lower().tolist()
+                search_volumes = keyword_data.set_index('Keyword')['Search Volume'].to_dict()
+
+                # Match keywords in processed text with keyword data
+                matched_keywords = set(data['processed_text'].str.split().explode()) & set(keywords)
+                matched_keywords_df = pd.DataFrame(
+                    [(kw, search_volumes[kw]) for kw in matched_keywords],
+                    columns=['Keyword', 'Search Volume']
+                )
+                st.dataframe(matched_keywords_df.sort_values(by='Search Volume', ascending=False))
+            else:
+                st.error("Keyword data does not have the required columns 'Keyword' and 'Avg. monthly searches'.")
     
     with col2:
         if "Topic Modeling" in analysis_options:
