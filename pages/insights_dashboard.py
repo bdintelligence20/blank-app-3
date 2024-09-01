@@ -14,13 +14,12 @@ import PyPDF2
 from io import StringIO
 import base64
 
-# Set up page configuration with a modern layout and theme
+# Set up page configuration with a modern layout
 st.set_page_config(
     page_title="Advanced Qualitative Data Analysis Dashboard",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
-    theme="dark"
+    initial_sidebar_state="expanded"
 )
 
 # Custom CSS for modern styling
@@ -32,6 +31,7 @@ st.markdown("""
         .stButton > button { border-radius: 5px; }
         .css-ffhzg2 { font-size: 16px; font-weight: bold; }
         .css-1d391kg { border: 1px solid #2A3E4C; }
+        .stDataFrame { border-radius: 8px; overflow: hidden; }
     </style>
     """, unsafe_allow_html=True)
 
