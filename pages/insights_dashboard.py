@@ -10,6 +10,70 @@ from openai import OpenAI
 from sklearn.manifold import TSNE
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from wordcloud import WordCloud, STOPWORDS
+import os
+import PyPDF2
+import markdown
+from io import StringIO
+
+# Function to read markdown files
+def read_markdown_file(filepath):
+    with open(filepath, 'r', encoding='utf-8') as file:
+        return file.read()
+
+# Function to read PDF files
+def read_pdf_file(filepath):
+    text = ""
+    with open(filepath, 'rb') as file:
+        pdf_reader = PyPDF2.PdfReader(file)
+        for page in pdf_reader.pages:
+            text += page.extract_text() or ""  # Ensuring no NoneType error
+    return text
+
+# Function to read text file containing potential keywords
+def read_text_file(filepath):
+    with open(filepath, 'r', encoding='utf-8') as file:
+        return file.read().splitlines()
+
+# Function to extract context from files in the "knowledge" folder
+def extract_context_from_knowledge():
+    context = ""
+    knowledge_folder_path = "knowledge"
+    
+    if os.path.exists(knowledge_folder_path):
+        for filename in os.listdir(knowledge_folder_path):
+            filepath = os.path.join(knowledge_folder_path, filename)
+            if filename.endswith('.md'):
+                context += read_markdown_file(filepath)
+            elif filename.endswith('.pdf'):
+                context += read_pdf_file(filepath)
+    return context
+
+# Load keyword data from the "current_keywords" folder
+def load_current_keyword_data():
+    current_keywords_path = os.path.join("current_keywords", "current_keywords.csv")  # Adjust the filename as necessary
+    current_keywords_data = None
+
+    # Load current keywords data
+    if os.path.exists(current_keywords_path):
+        try:
+            current_keywords_data = pd.read_csv(current_keywords_path, encoding='utf-8')
+        except UnicodeDecodeError:
+            try:
+                current_keywords_data = pd.read_csv(current_keywords_path, encoding='ISO-8859-1')
+            except UnicodeDecodeError:
+                current_keywords_data = pd.read_csv(current_keywords_path, encoding='utf-16')
+
+    return current_keywords_data
+
+# Load potential keywords from a text file in the "potential_keywords" folder
+def load_potential_keywords():
+    potential_keywords_path = os.path.join("potential_keywords", "potential_keywords.txt")  # Adjust the filename as necessary
+
+    if os.path.exists(potential_keywords_path):
+        return read_text_file(potential_keywords_path)
+    else:
+        st.error("Potential keywords file not found.")
+        return []
 
 # Page configuration
 st.set_page_config(
@@ -25,6 +89,15 @@ alt.themes.enable("dark")
 openai_api_key = st.secrets["openai"]["api_key"]
 client = OpenAI(api_key=openai_api_key)
 
+# Extract context from knowledge files
+knowledge_context = extract_context_from_knowledge()
+
+# Load current keywords data
+current_keywords_data = load_current_keyword_data()
+
+# Load potential keywords
+potential_keywords_list = load_potential_keywords()
+
 # Sidebar
 with st.sidebar:
     st.title('📊 Data Analysis Dashboard')
@@ -33,11 +106,6 @@ with st.sidebar:
         "Upload your qualitative data files (CSV, JSON, TXT)", 
         type=["csv", "json", "txt"], 
         accept_multiple_files=True
-    )
-    
-    keyword_file = st.file_uploader(
-        "Upload Google Keyword Planner data (CSV)", 
-        type=["csv"]
     )
 
     if uploaded_files:
@@ -54,10 +122,9 @@ with st.sidebar:
                         df = pd.read_csv(uploaded_file, delimiter='\t')
                     else:
                         st.error("Unsupported file type!")
-                        return None
+                        continue
                 except (UnicodeDecodeError, pd.errors.EmptyDataError):
                     try:
-                        # Retry with different encodings for CSV files
                         df = pd.read_csv(uploaded_file, encoding='ISO-8859-1')
                     except (UnicodeDecodeError, pd.errors.EmptyDataError):
                         try:
@@ -110,7 +177,8 @@ if uploaded_files and data is not None and text_columns:
                 sample_values = ', '.join(data[col].astype(str).sample(3).values)
                 column_descriptions += f"Column '{col}' has sample values like: {sample_values}. "
 
-            data_summary = f"The dataset contains {len(data)} rows and the following columns: {', '.join(text_columns)}. {column_descriptions}"
+            # Include knowledge context in the prompt
+            data_summary = f"The dataset contains {len(data)} rows and the following columns: {', '.join(text_columns)}. {column_descriptions} Knowledge context includes: {knowledge_context[:1000]}..."  # Limiting context to first 1000 characters
             
             # Display chat input and messages
             chat_container = st.container()
@@ -121,13 +189,13 @@ if uploaded_files and data is not None and text_columns:
                     
                     # Query the LLM with data context
                     response = client.chat.completions.create(
-                        model="gpt-4o-mini",
+                        model="gpt-4o",
                         messages=[
-                            {"role": "system", "content": f"You are an expert data analyst. Use the following dataset details to answer the user's questions: {data_summary}"},
+                            {"role": "system", "content": f"You are an expert data analyst. Use the following dataset details and additional context to answer the user's questions: {data_summary}"},
                             {"role": "user", "content": prompt}
                         ],
                         temperature=0.7,
-                        max_tokens=300,
+                        max_tokens=1000,
                         top_p=1,
                         frequency_penalty=0,
                         presence_penalty=0
@@ -160,33 +228,28 @@ if uploaded_files and data is not None and text_columns:
             sentiment_bar.update_layout(template="plotly_dark")
             st.plotly_chart(sentiment_bar, use_container_width=True)
         
-        # Keyword Search Volume Feature
-        if "Keyword Search Volume" in analysis_options and keyword_file is not None:
-            st.markdown("### Keyword Search Volume")
-            try:
-                keyword_data = pd.read_csv(keyword_file, encoding='utf-8')
-            except UnicodeDecodeError:
-                try:
-                    keyword_data = pd.read_csv(keyword_file, encoding='ISO-8859-1')
-                except UnicodeDecodeError:
-                    keyword_data = pd.read_csv(keyword_file, encoding='utf-16')
-            
-            # Adjust column names based on your file
-            if 'Keyword' in keyword_data.columns and 'Avg. monthly searches' in keyword_data.columns:
-                keyword_data.rename(columns={'Avg. monthly searches': 'Search Volume'}, inplace=True)
-                keywords = keyword_data['Keyword'].str.lower().tolist()
-                search_volumes = keyword_data.set_index('Keyword')['Search Volume'].to_dict()
+        # Display Current and Potential Keyword Search Volume
+        if "Keyword Search Volume" in analysis_options:
+            st.markdown("### Current Keyword Search Volume")
 
-                # Match keywords in processed text with keyword data
-                matched_keywords = set(data['processed_text'].str.split().explode()) & set(keywords)
-                matched_keywords_df = pd.DataFrame(
-                    [(kw, search_volumes[kw]) for kw in matched_keywords],
-                    columns=['Keyword', 'Search Volume']
-                )
-                st.dataframe(matched_keywords_df.sort_values(by='Search Volume', ascending=False))
+            if current_keywords_data is not None:
+                # Ensure all keywords are displayed, including those with empty search volumes
+                if 'Keyword' in current_keywords_data.columns and 'Avg. monthly searches' in current_keywords_data.columns:
+                    current_keywords_data['Search Volume'] = current_keywords_data['Avg. monthly searches'].fillna("No Data")
+                    st.dataframe(current_keywords_data[['Keyword', 'Search Volume']].sort_values(by='Search Volume', ascending=False, na_position='last'))
+                else:
+                    st.error("Current keyword data does not have the required columns 'Keyword' and 'Avg. monthly searches'.")
+
+            st.markdown("### Potential Keywords for Improvement")
+
+            # Display potential keywords as a list
+            if potential_keywords_list:
+                st.write("Here are some potential keywords for improvement:")
+                for keyword in potential_keywords_list:
+                    st.write(f"- {keyword}")
             else:
-                st.error("Keyword data does not have the required columns 'Keyword' and 'Avg. monthly searches'.")
-    
+                st.write("No potential keywords found or file is empty.")
+
     with col2:
         if "Topic Modeling" in analysis_options:
             st.markdown("### Topic Modeling")
@@ -220,14 +283,14 @@ if uploaded_files and data is not None and text_columns:
             interpretations = []
             for cluster_num in range(n_topics):
                 cluster_text = " ".join(vectorizer.get_feature_names_out()[topics_df.iloc[cluster_num].argsort()[-10:]])
-                interpretation_prompt = f"Interpret the following cluster of topics: {cluster_text}"
+                interpretation_prompt = f"Interpret the following cluster of topics based on the context: {cluster_text}. Additional context: {knowledge_context[:1000]}..."  # Limiting context to first 1000 characters
                 
                 response = client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-4o",
                     messages=[{"role": "system", "content": "You are a data analyst."},
                               {"role": "user", "content": interpretation_prompt}],
                     temperature=1,
-                    max_tokens=150,
+                    max_tokens=500,
                     top_p=1,
                     frequency_penalty=0,
                     presence_penalty=0
@@ -243,6 +306,8 @@ if uploaded_files and data is not None and text_columns:
             - **Dashboard Features**: Provides qualitative data analysis including topic modeling, sentiment analysis, clustering of topics, keyword search volume matching, and visualization tools like word clouds and scatter plots.
             - **Customization**: Users can choose the data columns for analysis and select different color themes for visualizations.
             - **Data Handling**: Supports multiple file uploads and handles different formats (CSV, JSON, TXT).
+            - **Keyword Analysis**: Displays current keyword search volumes and potential keywords for improvement based on Google Keyword Planner data.
+            - **Knowledge Integration**: Utilizes additional context from uploaded markdown and PDF files to enrich LLM responses and cluster interpretations.
         """)
 
 else:
