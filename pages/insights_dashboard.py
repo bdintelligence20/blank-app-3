@@ -35,6 +35,11 @@ with st.sidebar:
         accept_multiple_files=True
     )
     
+    keyword_file = st.file_uploader(
+        "Upload Google Keyword Planner data (CSV)", 
+        type=["csv"]
+    )
+
     if uploaded_files:
         # Load data
         def load_data(uploaded_files):
@@ -68,7 +73,7 @@ with st.sidebar:
             # Analysis options
             analysis_options = st.multiselect(
                 "Select analysis types",
-                ["Topic Modeling", "Sentiment Analysis", "Word Cloud", "Topic Clustering"]
+                ["Topic Modeling", "Sentiment Analysis", "Word Cloud", "Topic Clustering", "Keyword Search Volume"]
             )
 
 # Main Dashboard
@@ -111,7 +116,7 @@ if uploaded_files and data is not None and text_columns:
                             {"role": "user", "content": prompt}
                         ],
                         temperature=0.7,
-                        max_tokens=10000,
+                        max_tokens=300,
                         top_p=1,
                         frequency_penalty=0,
                         presence_penalty=0
@@ -143,6 +148,23 @@ if uploaded_files and data is not None and text_columns:
             )
             sentiment_bar.update_layout(template="plotly_dark")
             st.plotly_chart(sentiment_bar, use_container_width=True)
+        
+        # Keyword Search Volume Feature
+        if "Keyword Search Volume" in analysis_options and keyword_file is not None:
+            st.markdown("### Keyword Search Volume")
+            keyword_data = pd.read_csv(keyword_file)
+            
+            # Assuming keyword data has columns 'Keyword' and 'Search Volume'
+            keywords = keyword_data['Keyword'].str.lower().tolist()
+            search_volumes = keyword_data.set_index('Keyword')['Search Volume'].to_dict()
+            
+            # Match keywords in processed text with keyword data
+            matched_keywords = set(data['processed_text'].str.split().explode()) & set(keywords)
+            matched_keywords_df = pd.DataFrame(
+                [(kw, search_volumes[kw]) for kw in matched_keywords],
+                columns=['Keyword', 'Search Volume']
+            )
+            st.dataframe(matched_keywords_df.sort_values(by='Search Volume', ascending=False))
     
     with col2:
         if "Topic Modeling" in analysis_options:
@@ -194,10 +216,10 @@ if uploaded_files and data is not None and text_columns:
             
             for interpretation in interpretations:
                 st.markdown(interpretation)
-    
+
     with st.expander("About"):
         st.write("""
-            - **Dashboard Features**: Provides qualitative data analysis including topic modeling, sentiment analysis, clustering of topics, and visualization tools like word clouds and scatter plots.
+            - **Dashboard Features**: Provides qualitative data analysis including topic modeling, sentiment analysis, clustering of topics, keyword search volume matching, and visualization tools like word clouds and scatter plots.
             - **Customization**: Users can choose the data columns for analysis and select different color themes for visualizations.
             - **Data Handling**: Supports multiple file uploads and handles different formats (CSV, JSON, TXT).
         """)
@@ -207,3 +229,4 @@ else:
         st.error("Please select at least one text column for analysis.")
     else:
         st.info("Upload files to start analysis.")
+
