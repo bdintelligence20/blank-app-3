@@ -11,3 +11,5 @@ openai
 numpy
 torch
 flair
+PyPDF2
+markdown
