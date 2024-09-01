@@ -41,19 +41,26 @@ with st.sidebar:
     )
 
     if uploaded_files:
-        # Load data
+        # Load data with encoding handling
         def load_data(uploaded_files):
             dataframes = []
             for uploaded_file in uploaded_files:
-                if uploaded_file.type == "text/csv":
-                    df = pd.read_csv(uploaded_file)
-                elif uploaded_file.type == "application/json":
-                    df = pd.read_json(uploaded_file)
-                elif uploaded_file.type == "text/plain":
-                    df = pd.read_csv(uploaded_file, delimiter='\t')
-                else:
-                    st.error("Unsupported file type!")
-                    return None
+                try:
+                    if uploaded_file.type == "text/csv":
+                        df = pd.read_csv(uploaded_file)
+                    elif uploaded_file.type == "application/json":
+                        df = pd.read_json(uploaded_file)
+                    elif uploaded_file.type == "text/plain":
+                        df = pd.read_csv(uploaded_file, delimiter='\t')
+                    else:
+                        st.error("Unsupported file type!")
+                        return None
+                except UnicodeDecodeError:
+                    # Retry with different encodings
+                    try:
+                        df = pd.read_csv(uploaded_file, encoding='ISO-8859-1')
+                    except UnicodeDecodeError:
+                        df = pd.read_csv(uploaded_file, encoding='utf-16')
                 dataframes.append(df)
             return pd.concat(dataframes, ignore_index=True)
         
@@ -152,7 +159,7 @@ if uploaded_files and data is not None and text_columns:
         # Keyword Search Volume Feature
         if "Keyword Search Volume" in analysis_options and keyword_file is not None:
             st.markdown("### Keyword Search Volume")
-            keyword_data = pd.read_csv(keyword_file)
+            keyword_data = pd.read_csv(keyword_file, encoding='utf-8', errors='ignore')
             
             # Assuming keyword data has columns 'Keyword' and 'Search Volume'
             keywords = keyword_data['Keyword'].str.lower().tolist()
@@ -190,7 +197,7 @@ if uploaded_files and data is not None and text_columns:
             cluster_df['Cluster'] = topics_clustered
             
             # Scatter plot for clusters
-            scatter_plot = px.scatter(cluster_df, x='X', y='Y', color='Cluster', color_continuous_scale=selected_color_theme)
+            scatter_plot = px.scatter(cluster_df, x='X', y='Y', color='Cluster', color_discrete_sequence=selected_color_theme)
             scatter_plot.update_layout(template="plotly_dark")
             st.plotly_chart(scatter_plot, use_container_width=True)
             
@@ -229,4 +236,3 @@ else:
         st.error("Please select at least one text column for analysis.")
     else:
         st.info("Upload files to start analysis.")
-
