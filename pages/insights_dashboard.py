@@ -31,8 +31,12 @@ def read_pdf_file(filepath):
 
 # Function to read text file containing potential keywords
 def read_text_file(filepath):
-    with open(filepath, 'r', encoding='utf-8') as file:
-        return file.read().splitlines()
+    try:
+        with open(filepath, 'r', encoding='utf-8') as file:
+            return file.read().splitlines()
+    except FileNotFoundError:
+        st.error(f"The file {filepath} was not found.")
+        return []
 
 # Function to extract context from files in the "knowledge" folder
 def extract_context_from_knowledge():
@@ -48,7 +52,7 @@ def extract_context_from_knowledge():
                 context += read_pdf_file(filepath)
     return context
 
-# Load keyword data from the "current_keywords" folder
+# Load current keyword data from the "current_keywords" folder
 def load_current_keyword_data():
     current_keywords_path = os.path.join("current_keywords", "current_keywords.csv")  # Adjust the filename as necessary
     current_keywords_data = None
@@ -65,14 +69,24 @@ def load_current_keyword_data():
 
     return current_keywords_data
 
-# Load potential keywords from a text file in the "potential_keywords" folder
+# Load potential keywords from any text file in the "potential_keywords" folder
 def load_potential_keywords():
-    potential_keywords_path = os.path.join("potential_keywords", "potential_keywords.txt")  # Adjust the filename as necessary
+    # Path to the potential_keywords folder
+    potential_keywords_folder = "potential_keywords"
 
-    if os.path.exists(potential_keywords_path):
-        return read_text_file(potential_keywords_path)
+    # Check if the folder exists
+    if os.path.exists(potential_keywords_folder):
+        # List all files in the folder
+        files = os.listdir(potential_keywords_folder)
+        if files:
+            # Pick the first file (assuming there's only one relevant file)
+            potential_keywords_path = os.path.join(potential_keywords_folder, files[0])
+            return read_text_file(potential_keywords_path)
+        else:
+            st.error("No files found in the potential_keywords folder.")
+            return []
     else:
-        st.error("Potential keywords file not found.")
+        st.error("Potential keywords folder not found.")
         return []
 
 # Page configuration
@@ -189,13 +203,13 @@ if uploaded_files and data is not None and text_columns:
                     
                     # Query the LLM with data context
                     response = client.chat.completions.create(
-                        model="gpt-4o",
+                        model="gpt-4o-mini",
                         messages=[
                             {"role": "system", "content": f"You are an expert data analyst. Use the following dataset details and additional context to answer the user's questions: {data_summary}"},
                             {"role": "user", "content": prompt}
                         ],
                         temperature=0.7,
-                        max_tokens=1000,
+                        max_tokens=300,
                         top_p=1,
                         frequency_penalty=0,
                         presence_penalty=0
@@ -286,11 +300,11 @@ if uploaded_files and data is not None and text_columns:
                 interpretation_prompt = f"Interpret the following cluster of topics based on the context: {cluster_text}. Additional context: {knowledge_context[:1000]}..."  # Limiting context to first 1000 characters
                 
                 response = client.chat.completions.create(
-                    model="gpt-4o",
+                    model="gpt-4o-mini",
                     messages=[{"role": "system", "content": "You are a data analyst."},
                               {"role": "user", "content": interpretation_prompt}],
                     temperature=1,
-                    max_tokens=500,
+                    max_tokens=150,
                     top_p=1,
                     frequency_penalty=0,
                     presence_penalty=0
