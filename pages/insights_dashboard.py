@@ -11,8 +11,29 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from wordcloud import WordCloud, STOPWORDS
 import os
 import PyPDF2
-import markdown
 from io import StringIO
+import base64
+
+# Set up page configuration with a modern layout and theme
+st.set_page_config(
+    page_title="Advanced Qualitative Data Analysis Dashboard",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    theme="dark"
+)
+
+# Custom CSS for modern styling
+st.markdown("""
+    <style>
+        .sidebar .sidebar-content { background-color: #2A3E4C; }
+        .css-18e3th9 { padding: 1rem; }
+        .css-1lcbmhc { font-size: 1rem; font-weight: bold; }
+        .stButton > button { border-radius: 5px; }
+        .css-ffhzg2 { font-size: 16px; font-weight: bold; }
+        .css-1d391kg { border: 1px solid #2A3E4C; }
+    </style>
+    """, unsafe_allow_html=True)
 
 # Function to read markdown files
 def read_markdown_file(filepath):
@@ -100,16 +121,6 @@ def load_potential_keywords():
         st.error("Potential keywords folder not found.")
         return []
 
-# Page configuration
-st.set_page_config(
-    page_title="Qualitative Data Analysis Dashboard",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-alt.themes.enable("dark")
-
 # Initialize OpenAI client using Streamlit secrets
 openai_api_key = st.secrets["openai"]["api_key"]
 client = OpenAI(api_key=openai_api_key)
@@ -125,7 +136,7 @@ potential_keywords_list = load_potential_keywords()
 
 # Sidebar
 with st.sidebar:
-    st.title('📊 Data Analysis Dashboard')
+    st.title('📊 Advanced Data Analysis Dashboard')
     
     uploaded_files = st.file_uploader(
         "Upload your qualitative data files (CSV, JSON, TXT)", 
