@@ -53,36 +53,44 @@ def extract_context_from_knowledge():
 
 # Load current keyword data from the "current_keywords" folder
 def load_current_keyword_data():
-    current_keywords_path = os.path.join("current_keywords", "current_keywords.csv")  # Adjust the filename as necessary
+    current_keywords_folder = "current_keywords"
     current_keywords_data = None
 
-    # Load current keywords data
-    if os.path.exists(current_keywords_path):
-        try:
-            current_keywords_data = pd.read_csv(current_keywords_path, encoding='utf-8')
-        except UnicodeDecodeError:
+    # Check if the folder exists
+    if os.path.exists(current_keywords_folder):
+        # List all CSV files in the folder
+        files = [f for f in os.listdir(current_keywords_folder) if f.endswith('.csv')]
+        if files:
+            # Pick the first CSV file
+            current_keywords_path = os.path.join(current_keywords_folder, files[0])
             try:
-                current_keywords_data = pd.read_csv(current_keywords_path, encoding='ISO-8859-1')
+                current_keywords_data = pd.read_csv(current_keywords_path, encoding='utf-8')
             except UnicodeDecodeError:
-                current_keywords_data = pd.read_csv(current_keywords_path, encoding='utf-16')
-
+                try:
+                    current_keywords_data = pd.read_csv(current_keywords_path, encoding='ISO-8859-1')
+                except UnicodeDecodeError:
+                    current_keywords_data = pd.read_csv(current_keywords_path, encoding='utf-16')
+        else:
+            st.error("No CSV files found in the current_keywords folder.")
+    else:
+        st.error("Current keywords folder not found.")
+    
     return current_keywords_data
 
 # Load potential keywords from any text file in the "potential_keywords" folder
 def load_potential_keywords():
-    # Path to the potential_keywords folder
     potential_keywords_folder = "potential_keywords"
 
     # Check if the folder exists
     if os.path.exists(potential_keywords_folder):
-        # List all files in the folder
-        files = os.listdir(potential_keywords_folder)
+        # List all text files in the folder
+        files = [f for f in os.listdir(potential_keywords_folder) if f.endswith('.txt')]
         if files:
-            # Pick the first file (assuming there's only one relevant file)
+            # Pick the first text file
             potential_keywords_path = os.path.join(potential_keywords_folder, files[0])
             return read_text_file(potential_keywords_path)
         else:
-            st.error("No files found in the potential_keywords folder.")
+            st.error("No text files found in the potential_keywords folder.")
             return []
     else:
         st.error("Potential keywords folder not found.")
