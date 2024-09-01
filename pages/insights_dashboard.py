@@ -53,14 +53,16 @@ def extract_context_from_knowledge():
 
 # Load current keyword data from the "current_keywords" folder
 def load_current_keyword_data():
-    current_keywords_folder = "current_keywords"
+    current_keywords_folder = os.path.join(os.getcwd(), "current_keywords")
     current_keywords_data = None
 
     # Check if the folder exists
     if os.path.exists(current_keywords_folder):
+        st.write(f"Found current_keywords folder at: {current_keywords_folder}")  # Debug statement
         # List all CSV files in the folder
         files = [f for f in os.listdir(current_keywords_folder) if f.endswith('.csv')]
         if files:
+            st.write(f"CSV files found: {files}")  # Debug statement
             # Pick the first CSV file
             current_keywords_path = os.path.join(current_keywords_folder, files[0])
             try:
@@ -79,13 +81,15 @@ def load_current_keyword_data():
 
 # Load potential keywords from any text file in the "potential_keywords" folder
 def load_potential_keywords():
-    potential_keywords_folder = "potential_keywords"
+    potential_keywords_folder = os.path.join(os.getcwd(), "potential_keywords")
 
     # Check if the folder exists
     if os.path.exists(potential_keywords_folder):
+        st.write(f"Found potential_keywords folder at: {potential_keywords_folder}")  # Debug statement
         # List all text files in the folder
         files = [f for f in os.listdir(potential_keywords_folder) if f.endswith('.txt')]
         if files:
+            st.write(f"Text files found: {files}")  # Debug statement
             # Pick the first text file
             potential_keywords_path = os.path.join(potential_keywords_folder, files[0])
             return read_text_file(potential_keywords_path)
@@ -256,7 +260,7 @@ if uploaded_files and data is not None and text_columns:
             if current_keywords_data is not None:
                 # Ensure all keywords are displayed, including those with empty search volumes
                 if 'Keyword' in current_keywords_data.columns and 'Avg. monthly searches' in current_keywords_data.columns:
-                    current_keywords_data['Search Volume'] = current_keywords_data['Avg. monthly searches'].fillna("No Data")
+                    current_keywords_data['Search Volume'] = pd.to_numeric(current_keywords_data['Avg. monthly searches'], errors='coerce')
                     st.dataframe(current_keywords_data[['Keyword', 'Search Volume']].sort_values(by='Search Volume', ascending=False, na_position='last'))
                 else:
                     st.error("Current keyword data does not have the required columns 'Keyword' and 'Avg. monthly searches'.")
