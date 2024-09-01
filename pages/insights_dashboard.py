@@ -225,13 +225,13 @@ if uploaded_files and data is not None and text_columns:
                     
                     # Query the LLM with data context
                     response = client.chat.completions.create(
-                        model="gpt-4o-mini",
+                        model="gpt-4o",
                         messages=[
-                            {"role": "system", "content": f"You are an expert data analyst. Use the following dataset details and additional context to answer the user's questions: {data_summary}"},
+                            {"role": "system", "content": f"You are an expert data analyst.Use UK ENglish. Use the following dataset details and additional context to answer the user's questions: {data_summary}"},
                             {"role": "user", "content": prompt}
                         ],
-                        temperature=0.7,
-                        max_tokens=300,
+                        temperature=0.5,
+                        max_tokens=4000,
                         top_p=1,
                         frequency_penalty=0,
                         presence_penalty=0
@@ -322,11 +322,11 @@ if uploaded_files and data is not None and text_columns:
                 interpretation_prompt = f"Interpret the following cluster of topics based on the context: {cluster_text}. Additional context: {knowledge_context[:1000]}..."  # Limiting context to first 1000 characters
                 
                 response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "system", "content": "You are a data analyst."},
+                    model="gpt-4o",
+                    messages=[{"role": "system", "content": "You are a data analyst. Use UK ENglish."},
                               {"role": "user", "content": interpretation_prompt}],
                     temperature=1,
-                    max_tokens=150,
+                    max_tokens=1000,
                     top_p=1,
                     frequency_penalty=0,
                     presence_penalty=0
