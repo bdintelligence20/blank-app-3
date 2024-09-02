@@ -144,6 +144,10 @@ with st.sidebar:
         accept_multiple_files=True
     )
 
+    # Initialize variables with default values
+    text_columns = []  # Define text_columns as an empty list
+    analysis_options = []  # Define analysis_options as an empty list
+
     if uploaded_files:
         # Load data with encoding handling
         def load_data(uploaded_files):
@@ -171,55 +175,27 @@ with st.sidebar:
                 dataframes.append(df)
             return pd.concat(dataframes, ignore_index=True) if dataframes else pd.DataFrame()
         
-        # Load the uploaded data
         data = load_data(uploaded_files)
         
-        # Check if data is loaded and contains 'division' in any column name
         if data is not None:
-            division_columns = [col for col in data.columns if 'division' in col.lower()]
+            # Select columns for analysis
+            text_columns = st.multiselect(
+                "Select the text columns you want to analyze", 
+                data.columns
+            )
             
-            if division_columns:
-                # If columns with 'division' found, create a filter
-                division_column = division_columns[0]  # Use the first match
-                divisions = data[division_column].unique()
-                selected_divisions = st.multiselect(f"Filter by {division_column}", divisions)
-                
-                if selected_divisions:
-                    # Apply division filter to data
-                    data = data[data[division_column].isin(selected_divisions)]
-
-                # Only continue with further filtering if division data exists
-                if not data.empty:
-                    # Select columns for analysis
-                    text_columns = st.multiselect(
-                        "Select the text columns you want to analyze", 
-                        data.columns
-                    )
-
-                    # Ensure `text_columns` is defined to avoid NameError
-                    if text_columns:
-                        # Select color theme for plots
-                        color_theme_list = ['blues', 'cividis', 'greens', 'inferno', 'magma', 'plasma', 'reds', 'rainbow', 'turbo', 'viridis']
-                        selected_color_theme = st.selectbox('Select a color theme', color_theme_list)
-
-                        # Analysis options
-                        analysis_options = st.multiselect(
-                            "Select analysis types",
-                            ["Topic Modeling", "Sentiment Analysis", "Word Cloud", "Topic Clustering", "Keyword Search Volume"]
-                        )
-
-                        # Display the filtered data for verification
-                        st.write("### Filtered Data Preview")
-                        st.dataframe(data)
-                    else:
-                        st.error("No text columns selected for analysis.")
-            else:
-                st.error("No column contains the word 'division'.")
-        else:
-            st.error("No data loaded.")
+            # Select color theme for plots
+            color_theme_list = ['blues', 'cividis', 'greens', 'inferno', 'magma', 'plasma', 'reds', 'rainbow', 'turbo', 'viridis']
+            selected_color_theme = st.selectbox('Select a color theme', color_theme_list)
+            
+            # Analysis options
+            analysis_options = st.multiselect(
+                "Select analysis types",
+                ["Topic Modeling", "Sentiment Analysis", "Word Cloud", "Topic Clustering", "Keyword Search Volume"]
+            )
 
 # Main Dashboard
-if uploaded_files and data is not None and 'text_columns' in locals():
+if uploaded_files and data is not None and text_columns:
     # Preprocess text data
     data['processed_text'] = data[text_columns].astype(str).apply(lambda x: ' '.join(x), axis=1).apply(lambda x: x.lower())
 
@@ -238,7 +214,12 @@ if uploaded_files and data is not None and 'text_columns' in locals():
             # Create a data summary for context based on selected columns
             column_descriptions = ""
             for col in text_columns:
-                sample_values = ', '.join(data[col].astype(str).sample(3).values)
+                # Check if there are at least 3 rows before sampling
+                if len(data[col]) >= 3:
+                    sample_values = ', '.join(data[col].astype(str).sample(3).values)
+                else:
+                    sample_values = ', '.join(data[col].astype(str).values)
+                
                 column_descriptions += f"Column '{col}' has sample values like: {sample_values}. "
 
             # Include knowledge context in the prompt
@@ -255,7 +236,7 @@ if uploaded_files and data is not None and 'text_columns' in locals():
                     response = client.chat.completions.create(
                         model="gpt-4o",
                         messages=[
-                            {"role": "system", "content": f"You are an expert data analyst.Use UK ENglish. Use the following dataset details and additional context to answer the user's questions: {data_summary}"},
+                            {"role": "system", "content": f"You are an expert data analyst. Use UK English. Use the following dataset details and additional context to answer the user's questions: {data_summary}"},
                             {"role": "user", "content": prompt}
                         ],
                         temperature=0.5,
@@ -351,7 +332,7 @@ if uploaded_files and data is not None and 'text_columns' in locals():
                 
                 response = client.chat.completions.create(
                     model="gpt-4o",
-                    messages=[{"role": "system", "content": "You are a data analyst. Use UK ENglish."},
+                    messages=[{"role": "system", "content": "You are a data analyst. Use UK English."},
                               {"role": "user", "content": interpretation_prompt}],
                     temperature=1,
                     max_tokens=1000,
