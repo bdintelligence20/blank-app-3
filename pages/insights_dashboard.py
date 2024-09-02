@@ -190,6 +190,11 @@ with st.sidebar:
                 if selected_divisions:
                     # Apply division filter to data
                     data = data[data[division_column].isin(selected_divisions)]
+                
+                # Handle NaN values in the filtered data
+                if data.isnull().values.any():
+                    st.warning("Data contains NaN values. Filling NaN with empty strings for processing.")
+                    data.fillna("", inplace=True)
 
                 # Only continue with further filtering if division data exists
                 if not data.empty:
@@ -225,6 +230,11 @@ with st.sidebar:
 if uploaded_files and data is not None and text_columns:
     # Preprocess text data
     data['processed_text'] = data[text_columns].astype(str).apply(lambda x: ' '.join(x), axis=1).apply(lambda x: x.lower())
+
+    # Check for NaN after processing text
+    if data['processed_text'].isnull().any():
+        st.warning("Processed text contains NaN values. Filling NaN with empty strings for processing.")
+        data['processed_text'].fillna("", inplace=True)
 
     # Executive Summary
     st.markdown("## Executive Summary")
@@ -307,10 +317,10 @@ if uploaded_files and data is not None and text_columns:
             if current_keywords_data is not None:
                 # Ensure all keywords are displayed, including those with empty search volumes
                 if 'Keyword' in current_keywords_data.columns and 'Avg. monthly searches' in current_keywords_data.columns:
-                    current_keywords_data['Search Volume'] = pd.to_numeric(current_keywords_data['Avg. monthly searches'], errors='coerce')
-                    st.dataframe(current_keywords_data[['Keyword', 'Search Volume']].sort_values(by='Search Volume', ascending=False, na_position='last'))
-                else:
-                    st.error("Current keyword data does not have the required columns 'Keyword' and 'Avg. monthly searches'.")
+                                        current_keywords_data['Search Volume'] = pd.to_numeric(current_keywords_data['Avg. monthly searches'], errors='coerce')
+                st.dataframe(current_keywords_data[['Keyword', 'Search Volume']].sort_values(by='Search Volume', ascending=False, na_position='last'))
+            else:
+                st.error("Current keyword data does not have the required columns 'Keyword' and 'Avg. monthly searches'.")
 
             st.markdown("### Potential Keywords for Improvement")
 
@@ -387,3 +397,4 @@ else:
         st.error("Please select at least one text column for analysis.")
     else:
         st.info("Upload files to start analysis.")
+
