@@ -171,32 +171,44 @@ with st.sidebar:
                 dataframes.append(df)
             return pd.concat(dataframes, ignore_index=True) if dataframes else pd.DataFrame()
         
+        # Load the uploaded data
         data = load_data(uploaded_files)
         
+        # Check if data is loaded and 'Division' column exists
         if data is not None:
-            # Check if 'Division' column exists
             if 'Division' in data.columns:
                 # Division filter
                 divisions = data['Division'].unique()
                 selected_divisions = st.multiselect("Filter by Division", divisions)
                 if selected_divisions:
+                    # Apply division filter to data
                     data = data[data['Division'].isin(selected_divisions)]
-            
-            # Select columns for analysis
-            text_columns = st.multiselect(
-                "Select the text columns you want to analyze", 
-                data.columns
-            )
-            
-            # Select color theme for plots
-            color_theme_list = ['blues', 'cividis', 'greens', 'inferno', 'magma', 'plasma', 'reds', 'rainbow', 'turbo', 'viridis']
-            selected_color_theme = st.selectbox('Select a color theme', color_theme_list)
-            
-            # Analysis options
-            analysis_options = st.multiselect(
-                "Select analysis types",
-                ["Topic Modeling", "Sentiment Analysis", "Word Cloud", "Topic Clustering", "Keyword Search Volume"]
-            )
+
+                # Only continue with further filtering if division data exists
+                if not data.empty:
+                    # Select columns for analysis
+                    text_columns = st.multiselect(
+                        "Select the text columns you want to analyze", 
+                        data.columns
+                    )
+
+                    # Select color theme for plots
+                    color_theme_list = ['blues', 'cividis', 'greens', 'inferno', 'magma', 'plasma', 'reds', 'rainbow', 'turbo', 'viridis']
+                    selected_color_theme = st.selectbox('Select a color theme', color_theme_list)
+
+                    # Analysis options
+                    analysis_options = st.multiselect(
+                        "Select analysis types",
+                        ["Topic Modeling", "Sentiment Analysis", "Word Cloud", "Topic Clustering", "Keyword Search Volume"]
+                    )
+
+                    # Display the filtered data for verification
+                    st.write("### Filtered Data Preview")
+                    st.dataframe(data)
+            else:
+                st.error("The uploaded files do not contain a 'Division' column.")
+        else:
+            st.error("No data loaded.")
 
 # Main Dashboard
 if uploaded_files and data is not None and text_columns:
