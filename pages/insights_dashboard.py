@@ -178,21 +178,48 @@ with st.sidebar:
         data = load_data(uploaded_files)
         
         if data is not None:
-            # Select columns for analysis
-            text_columns = st.multiselect(
-                "Select the text columns you want to analyze", 
-                data.columns
-            )
+            # Find any column containing the word "division"
+            division_columns = [col for col in data.columns if 'division' in col.lower()]
             
-            # Select color theme for plots
-            color_theme_list = ['blues', 'cividis', 'greens', 'inferno', 'magma', 'plasma', 'reds', 'rainbow', 'turbo', 'viridis']
-            selected_color_theme = st.selectbox('Select a color theme', color_theme_list)
-            
-            # Analysis options
-            analysis_options = st.multiselect(
-                "Select analysis types",
-                ["Topic Modeling", "Sentiment Analysis", "Word Cloud", "Topic Clustering", "Keyword Search Volume"]
-            )
+            if division_columns:
+                # If columns with 'division' found, create a filter
+                division_column = division_columns[0]  # Use the first match
+                divisions = data[division_column].unique()
+                selected_divisions = st.multiselect(f"Filter by {division_column}", divisions)
+                
+                if selected_divisions:
+                    # Apply division filter to data
+                    data = data[data[division_column].isin(selected_divisions)]
+
+                # Only continue with further filtering if division data exists
+                if not data.empty:
+                    # Select columns for analysis
+                    text_columns = st.multiselect(
+                        "Select the text columns you want to analyze", 
+                        data.columns
+                    )
+
+                    # Ensure `text_columns` is defined to avoid NameError
+                    if text_columns:
+                        # Select color theme for plots
+                        color_theme_list = ['blues', 'cividis', 'greens', 'inferno', 'magma', 'plasma', 'reds', 'rainbow', 'turbo', 'viridis']
+                        selected_color_theme = st.selectbox('Select a color theme', color_theme_list)
+
+                        # Analysis options
+                        analysis_options = st.multiselect(
+                            "Select analysis types",
+                            ["Topic Modeling", "Sentiment Analysis", "Word Cloud", "Topic Clustering", "Keyword Search Volume"]
+                        )
+
+                        # Display the filtered data for verification
+                        st.write("### Filtered Data Preview")
+                        st.dataframe(data)
+                    else:
+                        st.error("No text columns selected for analysis.")
+            else:
+                st.error("No column contains the word 'division'.")
+        else:
+            st.error("No data loaded.")
 
 # Main Dashboard
 if uploaded_files and data is not None and text_columns:
