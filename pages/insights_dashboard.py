@@ -174,15 +174,19 @@ with st.sidebar:
         # Load the uploaded data
         data = load_data(uploaded_files)
         
-        # Check if data is loaded and 'Division' column exists
+        # Check if data is loaded and contains 'division' in any column name
         if data is not None:
-            if 'Division' in data.columns:
-                # Division filter
-                divisions = data['Division'].unique()
-                selected_divisions = st.multiselect("Filter by Division", divisions)
+            division_columns = [col for col in data.columns if 'division' in col.lower()]
+            
+            if division_columns:
+                # If columns with 'division' found, create a filter
+                division_column = division_columns[0]  # Use the first match
+                divisions = data[division_column].unique()
+                selected_divisions = st.multiselect(f"Filter by {division_column}", divisions)
+                
                 if selected_divisions:
                     # Apply division filter to data
-                    data = data[data['Division'].isin(selected_divisions)]
+                    data = data[data[division_column].isin(selected_divisions)]
 
                 # Only continue with further filtering if division data exists
                 if not data.empty:
@@ -192,26 +196,30 @@ with st.sidebar:
                         data.columns
                     )
 
-                    # Select color theme for plots
-                    color_theme_list = ['blues', 'cividis', 'greens', 'inferno', 'magma', 'plasma', 'reds', 'rainbow', 'turbo', 'viridis']
-                    selected_color_theme = st.selectbox('Select a color theme', color_theme_list)
+                    # Ensure `text_columns` is defined to avoid NameError
+                    if text_columns:
+                        # Select color theme for plots
+                        color_theme_list = ['blues', 'cividis', 'greens', 'inferno', 'magma', 'plasma', 'reds', 'rainbow', 'turbo', 'viridis']
+                        selected_color_theme = st.selectbox('Select a color theme', color_theme_list)
 
-                    # Analysis options
-                    analysis_options = st.multiselect(
-                        "Select analysis types",
-                        ["Topic Modeling", "Sentiment Analysis", "Word Cloud", "Topic Clustering", "Keyword Search Volume"]
-                    )
+                        # Analysis options
+                        analysis_options = st.multiselect(
+                            "Select analysis types",
+                            ["Topic Modeling", "Sentiment Analysis", "Word Cloud", "Topic Clustering", "Keyword Search Volume"]
+                        )
 
-                    # Display the filtered data for verification
-                    st.write("### Filtered Data Preview")
-                    st.dataframe(data)
+                        # Display the filtered data for verification
+                        st.write("### Filtered Data Preview")
+                        st.dataframe(data)
+                    else:
+                        st.error("No text columns selected for analysis.")
             else:
-                st.error("The uploaded files do not contain a 'Division' column.")
+                st.error("No column contains the word 'division'.")
         else:
             st.error("No data loaded.")
 
 # Main Dashboard
-if uploaded_files and data is not None and text_columns:
+if uploaded_files and data is not None and 'text_columns' in locals():
     # Preprocess text data
     data['processed_text'] = data[text_columns].astype(str).apply(lambda x: ' '.join(x), axis=1).apply(lambda x: x.lower())
 
