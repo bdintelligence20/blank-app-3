@@ -174,6 +174,14 @@ with st.sidebar:
         data = load_data(uploaded_files)
         
         if data is not None:
+            # Check if 'Division' column exists
+            if 'Division' in data.columns:
+                # Division filter
+                divisions = data['Division'].unique()
+                selected_divisions = st.multiselect("Filter by Division", divisions)
+                if selected_divisions:
+                    data = data[data['Division'].isin(selected_divisions)]
+            
             # Select columns for analysis
             text_columns = st.multiselect(
                 "Select the text columns you want to analyze", 
