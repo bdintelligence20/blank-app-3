@@ -231,7 +231,7 @@ if uploaded_files and data is not None and text_columns:
     # Preprocess text data
     data['processed_text'] = data[text_columns].astype(str).apply(lambda x: ' '.join(x), axis=1).apply(lambda x: x.lower())
 
-    # Check for NaN after processing text
+       # Check for NaN after processing text
     if data['processed_text'].isnull().any():
         st.warning("Processed text contains NaN values. Filling NaN with empty strings for processing.")
         data['processed_text'].fillna("", inplace=True)
@@ -317,10 +317,10 @@ if uploaded_files and data is not None and text_columns:
             if current_keywords_data is not None:
                 # Ensure all keywords are displayed, including those with empty search volumes
                 if 'Keyword' in current_keywords_data.columns and 'Avg. monthly searches' in current_keywords_data.columns:
-                                        current_keywords_data['Search Volume'] = pd.to_numeric(current_keywords_data['Avg. monthly searches'], errors='coerce')
-                st.dataframe(current_keywords_data[['Keyword', 'Search Volume']].sort_values(by='Search Volume', ascending=False, na_position='last'))
-            else:
-                st.error("Current keyword data does not have the required columns 'Keyword' and 'Avg. monthly searches'.")
+                    current_keywords_data['Search Volume'] = pd.to_numeric(current_keywords_data['Avg. monthly searches'], errors='coerce')
+                    st.dataframe(current_keywords_data[['Keyword', 'Search Volume']].sort_values(by='Search Volume', ascending=False, na_position='last'))
+                else:
+                    st.error("Current keyword data does not have the required columns 'Keyword' and 'Avg. monthly searches'.")
 
             st.markdown("### Potential Keywords for Improvement")
 
@@ -348,17 +348,21 @@ if uploaded_files and data is not None and text_columns:
             kmeans = KMeans(n_clusters=n_topics, random_state=42)
             topics_clustered = kmeans.fit_predict(lda.components_)
             
-            # Adjust perplexity to be less than the number of topics
-            perplexity = min(30, len(lda.components_) - 1)
-            tsne = TSNE(n_components=2, random_state=42, perplexity=perplexity)
-            tsne_results = tsne.fit_transform(lda.components_)
-            cluster_df = pd.DataFrame(tsne_results, columns=['X', 'Y'])
-            cluster_df['Cluster'] = topics_clustered
-            
-            # Scatter plot for clusters
-            scatter_plot = px.scatter(cluster_df, x='X', y='Y', color='Cluster', color_discrete_sequence=selected_color_theme)
-            scatter_plot.update_layout(template="plotly_dark")
-            st.plotly_chart(scatter_plot, use_container_width=True)
+            # Check if number of topics is sufficient for TSNE
+            if len(lda.components_) > 1:
+                # Adjust perplexity to be less than the number of topics
+                perplexity = min(30, len(lda.components_) - 1)
+                tsne = TSNE(n_components=2, random_state=42, perplexity=perplexity)
+                tsne_results = tsne.fit_transform(lda.components_)
+                cluster_df = pd.DataFrame(tsne_results, columns=['X', 'Y'])
+                cluster_df['Cluster'] = topics_clustered
+                
+                # Scatter plot for clusters
+                scatter_plot = px.scatter(cluster_df, x='X', y='Y', color='Cluster', color_discrete_sequence=selected_color_theme)
+                scatter_plot.update_layout(template="plotly_dark")
+                st.plotly_chart(scatter_plot, use_container_width=True)
+            else:
+                st.error("Not enough topics to perform TSNE. Please increase the number of topics.")
             
             # LLM Interpretation for Each Cluster
             st.markdown("### LLM Interpretations of Clusters")
